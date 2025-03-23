@@ -29,9 +29,15 @@ router.post('/', upload.single('image'), uploadToFirebase, async (req, res) => {
   try {
     const itemData = { ...req.body };
     
-    // Handle tags (convert comma-separated string to array if needed)
+    // Handle tags (parse JSON string if needed)
     if (typeof req.body.tags === 'string') {
-      itemData.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      try {
+        // First try to parse as JSON
+        itemData.tags = JSON.parse(req.body.tags);
+      } catch (e) {
+        // Fallback to comma-separated handling
+        itemData.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      }
     }
     
     // Add image URL if file was uploaded to Firebase
@@ -52,9 +58,15 @@ router.patch('/:id', upload.single('image'), uploadToFirebase, async (req, res) 
   try {
     const itemData = { ...req.body, lastUpdated: Date.now() };
     
-    // Handle tags (convert comma-separated string to array if needed)
+    // Handle tags (parse JSON string if needed)
     if (typeof req.body.tags === 'string') {
-      itemData.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      try {
+        // First try to parse as JSON
+        itemData.tags = JSON.parse(req.body.tags);
+      } catch (e) {
+        // Fallback to comma-separated handling
+        itemData.tags = req.body.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      }
     }
     
     // Add image URL if file was uploaded to Firebase
