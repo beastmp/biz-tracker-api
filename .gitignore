@@ -33,20 +33,6 @@ coverage/
 .stylelintcache
 .node_repl_history
 
-# PouchDB specific
-*.pouch
-*.couch
-.pouchdb/
-*_pouch_*/
-pouch__*
-_pouch_*/
-.couchdb/
-*.pouchdb/
-log.txt
-_replicator/
-_users/
-.sqlite_history
-
 # IDE / Editor specific
 .idea/
 .vscode/
