@@ -26,7 +26,8 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // Routes
 app.use('/api/items', require('./routes/items'));
-app.use('/api/sales', require('./routes/sales')); // Add sales routes
+app.use('/api/sales', require('./routes/sales'));
+app.use('/api/purchases', require('./routes/purchases'));
 
 // Default route
 app.get('/', (req, res) => {
