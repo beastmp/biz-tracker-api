@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Sale = require('../models/sale');
 const Item = require('../models/item');
 
@@ -41,17 +42,32 @@ router.post('/', async (req, res) => {
         throw new Error(`Item with ID ${saleItem.item} not found`);
       }
       
-      // Check if enough stock is available
-      if (item.quantity < saleItem.quantity) {
-        throw new Error(`Not enough stock for ${item.name}. Available: ${item.quantity}, Requested: ${saleItem.quantity}`);
+      // Handle inventory update based on tracking type
+      if (item.trackingType === 'quantity') {
+        // Check if enough stock is available
+        if (item.quantity < saleItem.quantity) {
+          throw new Error(`Not enough stock for ${item.name}. Available: ${item.quantity}, Requested: ${saleItem.quantity}`);
+        }
+        
+        // Update inventory quantity
+        await Item.findByIdAndUpdate(
+          saleItem.item, 
+          { $inc: { quantity: -saleItem.quantity }, lastUpdated: Date.now() },
+          { session, new: true }
+        );
+      } else if (item.trackingType === 'weight') {
+        // Check if enough weight is available
+        if (item.weight < saleItem.weight) {
+          throw new Error(`Not enough stock for ${item.name}. Available: ${item.weight} ${item.weightUnit}, Requested: ${saleItem.weight} ${saleItem.weightUnit}`);
+        }
+        
+        // Update inventory weight
+        await Item.findByIdAndUpdate(
+          saleItem.item, 
+          { $inc: { weight: -saleItem.weight }, lastUpdated: Date.now() },
+          { session, new: true }
+        );
       }
-      
-      // Update inventory quantity
-      await Item.findByIdAndUpdate(
-        saleItem.item, 
-        { $inc: { quantity: -saleItem.quantity }, lastUpdated: Date.now() },
-        { session, new: true }
-      );
     }
     
     // Commit the transaction
@@ -101,11 +117,22 @@ router.delete('/:id', async (req, res) => {
     
     // Restore inventory quantities for each item in the sale
     for (const saleItem of sale.items) {
-      await Item.findByIdAndUpdate(
-        saleItem.item,
-        { $inc: { quantity: saleItem.quantity }, lastUpdated: Date.now() },
-        { session, new: true }
-      );
+      const item = await Item.findById(saleItem.item);
+      if (!item) continue; // Skip if item no longer exists
+      
+      if (item.trackingType === 'quantity' && saleItem.quantity) {
+        await Item.findByIdAndUpdate(
+          saleItem.item,
+          { $inc: { quantity: saleItem.quantity }, lastUpdated: Date.now() },
+          { session, new: true }
+        );
+      } else if (item.trackingType === 'weight' && saleItem.weight) {
+        await Item.findByIdAndUpdate(
+          saleItem.item,
+          { $inc: { weight: saleItem.weight }, lastUpdated: Date.now() },
+          { session, new: true }
+        );
+      }
     }
     
     // Delete the sale

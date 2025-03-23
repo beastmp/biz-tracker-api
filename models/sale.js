@@ -8,8 +8,17 @@ const SaleItemSchema = new mongoose.Schema({
   },
   quantity: {
     type: Number,
-    required: true,
-    min: 1
+    min: 0,
+    default: 0
+  },
+  weight: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  weightUnit: {
+    type: String,
+    enum: ['oz', 'lb', 'g', 'kg']
   },
   priceAtSale: {
     type: Number,
@@ -53,6 +62,7 @@ const SaleSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
+    required: true,
     enum: ['cash', 'credit', 'debit', 'check', 'other'],
     default: 'cash'
   },
@@ -62,6 +72,7 @@ const SaleSchema = new mongoose.Schema({
   },
   status: {
     type: String,
+    required: true,
     enum: ['completed', 'refunded', 'partially_refunded'],
     default: 'completed'
   },

@@ -17,14 +17,33 @@ const ItemSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  trackingType: {
+    type: String,
+    required: true,
+    enum: ['quantity', 'weight'],
+    default: 'quantity'
+  },
   quantity: {
     type: Number,
-    required: true,
     default: 0
+  },
+  weight: {
+    type: Number,
+    default: 0
+  },
+  weightUnit: {
+    type: String,
+    enum: ['oz', 'lb', 'g', 'kg'],
+    default: 'lb'
   },
   price: {
     type: Number,
     required: true
+  },
+  priceType: {
+    type: String,
+    enum: ['each', 'per_weight_unit'],
+    default: 'each'
   },
   description: {
     type: String,

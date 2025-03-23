@@ -1,8 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const PouchDB = require('pouchdb');
-const ExpressPouchDB = require('express-pouchdb');
 require('dotenv').config();
 
 const app = express();
@@ -20,9 +18,6 @@ mongoose.connect(process.env.MONGODB_URI)
   .catch(err => {
     console.error('MongoDB connection error:', err);
   });
-
-// PouchDB setup
-app.use('/db', ExpressPouchDB(PouchDB));
 
 // Routes
 app.use('/api/items', require('./routes/items'));
