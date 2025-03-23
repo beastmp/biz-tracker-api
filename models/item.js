@@ -49,6 +49,16 @@ const ItemSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Add image URL field
+  imageUrl: {
+    type: String,
+    default: null
+  },
+  // Add tags array
+  tags: [{
+    type: String,
+    trim: true
+  }],
   lastUpdated: {
     type: Date,
     default: Date.now

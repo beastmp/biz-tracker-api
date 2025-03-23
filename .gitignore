@@ -39,3 +39,6 @@ coverage/
 *.swp
 *.swo
 .DS_Store
+
+# Firebase
+firebase-credentials.json
