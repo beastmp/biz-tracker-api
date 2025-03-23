@@ -15,11 +15,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "express-pouchdb": "^4.2.0",
-    "firebase-admin": "^13.2.0",
-    "mongoose": "^8.12.2",
-    "pouchdb": "^9.0.0",
-    "pouchdb-server": "^4.2.0"
+    "mongoose": "^8.12.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
