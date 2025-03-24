@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
         throw new Error(`Item with ID ${purchaseItem.item} not found`);
       }
       
-      // Handle inventory update based on tracking type
+      // Handle inventory update based on tracking type and price type
       if (item.trackingType === 'quantity') {
         // Update inventory quantity
         await Item.findByIdAndUpdate(
@@ -51,12 +51,27 @@ router.post('/', async (req, res) => {
           { session, new: true }
         );
       } else if (item.trackingType === 'weight') {
-        // Update inventory weight
-        await Item.findByIdAndUpdate(
-          purchaseItem.item, 
-          { $inc: { weight: purchaseItem.weight }, lastUpdated: Date.now() },
-          { session, new: true }
-        );
+        if (item.priceType === 'each') {
+          // Update both weight and quantity for weight-tracked items priced per item
+          await Item.findByIdAndUpdate(
+            purchaseItem.item, 
+            { 
+              $inc: { 
+                weight: purchaseItem.weight * purchaseItem.quantity, // Total weight
+                quantity: purchaseItem.quantity                     // Number of items
+              }, 
+              lastUpdated: Date.now() 
+            },
+            { session, new: true }
+          );
+        } else {
+          // Update just weight for weight-tracked items priced per weight unit
+          await Item.findByIdAndUpdate(
+            purchaseItem.item, 
+            { $inc: { weight: purchaseItem.weight }, lastUpdated: Date.now() },
+            { session, new: true }
+          );
+        }
       }
     }
     

@@ -42,7 +42,7 @@ router.post('/', async (req, res) => {
         throw new Error(`Item with ID ${saleItem.item} not found`);
       }
       
-      // Handle inventory update based on tracking type
+      // Handle inventory update based on tracking type and price type
       if (item.trackingType === 'quantity') {
         // Check if enough stock is available
         if (item.quantity < saleItem.quantity) {
@@ -56,17 +56,41 @@ router.post('/', async (req, res) => {
           { session, new: true }
         );
       } else if (item.trackingType === 'weight') {
-        // Check if enough weight is available
-        if (item.weight < saleItem.weight) {
-          throw new Error(`Not enough stock for ${item.name}. Available: ${item.weight} ${item.weightUnit}, Requested: ${saleItem.weight} ${saleItem.weightUnit}`);
+        if (item.priceType === 'each') {
+          // Check if enough items are available
+          if (item.quantity < saleItem.quantity) {
+            throw new Error(`Not enough items for ${item.name}. Available: ${item.quantity}, Requested: ${saleItem.quantity}`);
+          }
+          
+          // Calculate weight per item
+          const weightPerItem = item.weight / item.quantity;
+          const totalWeightToDeduct = weightPerItem * saleItem.quantity;
+          
+          // Update both weight and quantity
+          await Item.findByIdAndUpdate(
+            saleItem.item, 
+            { 
+              $inc: { 
+                weight: -totalWeightToDeduct,  // Deduct the correct weight amount
+                quantity: -saleItem.quantity   // Deduct number of items
+              }, 
+              lastUpdated: Date.now() 
+            },
+            { session, new: true }
+          );
+        } else {
+          // Check if enough weight is available
+          if (item.weight < saleItem.weight) {
+            throw new Error(`Not enough stock for ${item.name}. Available: ${item.weight} ${item.weightUnit}, Requested: ${saleItem.weight} ${saleItem.weightUnit}`);
+          }
+          
+          // Update inventory weight
+          await Item.findByIdAndUpdate(
+            saleItem.item, 
+            { $inc: { weight: -saleItem.weight }, lastUpdated: Date.now() },
+            { session, new: true }
+          );
         }
-        
-        // Update inventory weight
-        await Item.findByIdAndUpdate(
-          saleItem.item, 
-          { $inc: { weight: -saleItem.weight }, lastUpdated: Date.now() },
-          { session, new: true }
-        );
       }
     }
     
