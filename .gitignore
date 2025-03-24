@@ -41,4 +41,15 @@ coverage/
 .DS_Store
 
 # Firebase
+.firebase/
 firebase-credentials.json
+.runtimeconfig.json
+.firebaserc
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+functions/.env
+**/firebase-credentials.json
