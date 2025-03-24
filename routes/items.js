@@ -100,4 +100,60 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Get the next available SKU number
+router.get('/nextsku', async (req, res) => {
+  try {
+    // Find items with numeric SKUs
+    const items = await Item.find({ sku: /^\d+$/ });
+    
+    // Extract SKU numbers and convert to integers
+    let maxSkuNumber = 0;
+    items.forEach(item => {
+      const skuNumber = parseInt(item.sku);
+      if (!isNaN(skuNumber) && skuNumber > maxSkuNumber) {
+        maxSkuNumber = skuNumber;
+      }
+    });
+    
+    // Generate next SKU with zero padding (10 digits)
+    const nextSkuNumber = maxSkuNumber + 1;
+    const nextSku = nextSkuNumber.toString().padStart(10, '0');
+    
+    res.json({ nextSku });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all unique categories
+router.get('/categories', async (req, res) => {
+  try {
+    const categories = await Item.aggregate([
+      { $group: { _id: "$category" } },
+      { $match: { _id: { $ne: null, $ne: "" } } },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    res.json(categories.map(cat => cat._id));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get all unique tags
+router.get('/tags', async (req, res) => {
+  try {
+    const tags = await Item.aggregate([
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags" } },
+      { $match: { _id: { $ne: null, $ne: "" } } },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    res.json(tags.map(tag => tag._id));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
