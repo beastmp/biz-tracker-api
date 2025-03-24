@@ -68,4 +68,5 @@ exports.api = onRequest({
     "https://biz-tracker-a5562.firebaseapp.com",
   ],
   maxInstances: 10,
+  timeoutSeconds: 540,
 }, app);
