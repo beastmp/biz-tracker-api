@@ -1,0 +1,34 @@
+# Deploy Firebase Functions on merge to main branch
+name: Deploy Firebase Functions on merge
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy_functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies in functions directory
+        run: cd functions && npm ci
+
+      - name: Create .env file
+        run: |
+          cd functions
+          echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" > .env
+          echo "STORAGE_BUCKET=${{ secrets.STORAGE_BUCKET }}" >> .env
+
+      - name: Deploy to Firebase Functions
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BIZ_TRACKER_A5562 }}
+          channelId: live
+          projectId: biz-tracker-a5562
+          entryPoint: ./functions

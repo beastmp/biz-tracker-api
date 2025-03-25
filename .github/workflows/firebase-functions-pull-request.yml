@@ -1,0 +1,35 @@
+# Preview Firebase Functions deployment on PR
+name: Preview Firebase Functions on PR
+on: pull_request
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+jobs:
+  preview_functions:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies in functions directory
+        run: cd functions && npm ci
+
+      - name: Create .env file
+        run: |
+          cd functions
+          echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" > .env
+          echo "STORAGE_BUCKET=${{ secrets.STORAGE_BUCKET }}" >> .env
+
+      - name: Preview Firebase Functions deployment
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BIZ_TRACKER_A5562 }}
+          projectId: biz-tracker-a5562
+          entryPoint: ./functions
