@@ -263,17 +263,23 @@ router.get("/reports/by-date", async (req, res) => {
 
     const report = {
       totalPurchases: purchases.length,
-      totalCost: purchases.reduce((sum, purchase) => sum + purchase.total, 0),
+      totalCost: purchases.length > 0 ?
+        purchases.reduce((sum, purchase) => sum + purchase.total, 0) : 0,
       averagePurchaseValue: purchases.length > 0 ?
         purchases.reduce((sum, purchase) =>
-          sum + purchase.total, 0) / purchases.length :
-        0,
-      purchases,
+          sum + purchase.total, 0) / purchases.length : 0,
+      purchases: purchases || [],
     };
 
     res.json(report);
   } catch (err) {
-    res.status(500).json({message: err.message});
+    res.status(500).json({
+      message: err.message,
+      totalPurchases: 0,
+      totalCost: 0,
+      averagePurchaseValue: 0,
+      purchases: [],
+    });
   }
 });
 

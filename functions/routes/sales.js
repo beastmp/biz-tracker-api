@@ -205,15 +205,22 @@ router.get("/reports/by-date", async (req, res) => {
 
     const report = {
       totalSales: sales.length,
-      totalRevenue: sales.reduce((sum, sale) => sum + sale.total, 0),
+      totalRevenue: sales.length > 0 ?
+        sales.reduce((sum, sale) => sum + sale.total, 0) : 0,
       averageOrderValue: sales.length > 0 ?
         sales.reduce((sum, sale) => sum + sale.total, 0) / sales.length : 0,
-      sales,
+      sales: sales || [],
     };
 
     res.json(report);
   } catch (err) {
-    res.status(500).json({message: err.message});
+    res.status(500).json({
+      message: err.message,
+      totalSales: 0,
+      totalRevenue: 0,
+      averageOrderValue: 0,
+      sales: [],
+    });
   }
 });
 
