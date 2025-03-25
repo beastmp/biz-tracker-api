@@ -41,13 +41,15 @@ app.use(cors({
 app.use(express.json());
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => {
-      console.log("✅ Connected to MongoDB");
-    })
-    .catch((err) => {
-      console.error("❌ MongoDB connection error:", err);
-    });
+mongoose.connect(process.env.MONGODB_URI, {
+  serverSelectionTimeoutMS: 60000, // Increase from default 10000ms
+  socketTimeoutMS: 120000, // Increase socket timeout
+  connectTimeoutMS: 60000, // Connection timeout
+}).then(() => {
+  console.log("✅ Connected to MongoDB");
+}).catch((err) => {
+  console.error("❌ MongoDB connection error:", err);
+});
 
 // Routes
 app.use("/items", require("./routes/items"));
