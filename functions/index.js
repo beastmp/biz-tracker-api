@@ -40,6 +40,12 @@ app.use(cors({
 
 app.use(express.json());
 
+// Strip the /api prefix from incoming requests
+app.use("/api", (req, res, next) => {
+  req.url = req.url.replace(/^\/api/, ""); // Remove the /api prefix
+  next();
+});
+
 // Database connection
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 60000, // Increase from default 10000ms
@@ -51,10 +57,10 @@ mongoose.connect(process.env.MONGODB_URI, {
   console.error("❌ MongoDB connection error:", err);
 });
 
-// Routes
-app.use("/items", require("./routes/items"));
-app.use("/sales", require("./routes/sales"));
-app.use("/purchases", require("./routes/purchases"));
+// Mount routes under /api
+app.use("/api/items", require("./routes/items"));
+app.use("/api/sales", require("./routes/sales"));
+app.use("/api/purchases", require("./routes/purchases"));
 
 // Default route
 app.get("/", (req, res) => {
