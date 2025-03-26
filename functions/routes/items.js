@@ -2,7 +2,8 @@ const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const Item = require("../models/item");
-const {upload, uploadToFirebase} = require("../utils/fileUpload");
+const {upload, uploadToFirebase, uploadErrorHandler} =
+  require("../utils/fileUpload");
 
 // Get all items
 router.get("/", async (req, res) => {
@@ -83,51 +84,26 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create new item with Firebase image upload
-router.post("/", upload.single("image"), uploadToFirebase, async (req, res) => {
-  try {
-    const itemData = {...req.body};
-
-    // Handle tags (parse JSON string if needed)
-    if (typeof req.body.tags === "string") {
-      try {
-        // First try to parse as JSON
-        itemData.tags = JSON.parse(req.body.tags);
-      } catch (e) {
-        // Fallback to comma-separated handling
-        itemData.tags = req.body.tags.split(",").map((tag) =>
-          tag.trim()).filter((tag) => tag);
-      }
-    }
-
-    // Add image URL if file was uploaded to Firebase
-    if (req.file && req.file.firebaseUrl) {
-      itemData.imageUrl = req.file.firebaseUrl;
-    }
-
-    const item = new Item(itemData);
-    const newItem = await item.save();
-    res.status(201).json(newItem);
-  } catch (err) {
-    res.status(400).json({message: err.message});
-  }
-});
-
-// Update item with Firebase image upload
-router.patch("/:id", upload.single("image"), uploadToFirebase,
+// Create a new item
+router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
     async (req, res) => {
       try {
-        const itemData = {...req.body, lastUpdated: Date.now()};
+        console.log("Creating new item");
+        console.log("Request body fields:", Object.keys(req.body));
+        console.log("Request file:", req.file ?
+          `File received: ${req.file.originalname}` : "No file");
+
+        const itemData = {...req.body};
 
         // Handle tags (parse JSON string if needed)
         if (typeof req.body.tags === "string") {
           try {
-            // First try to parse as JSON
             itemData.tags = JSON.parse(req.body.tags);
           } catch (e) {
-            // Fallback to comma-separated handling
-            itemData.tags = req.body.tags.split(",").map((tag) =>
-              tag.trim()).filter((tag) => tag);
+            console.error("Error parsing tags JSON:", e);
+            itemData.tags = req.body.tags.split(",")
+                .map((tag) => tag.trim())
+                .filter((tag) => tag);
           }
         }
 
@@ -136,16 +112,111 @@ router.patch("/:id", upload.single("image"), uploadToFirebase,
           itemData.imageUrl = req.file.firebaseUrl;
         }
 
+        // Convert numeric fields
+        ["quantity", "price", "weight"].forEach((field) => {
+          if (itemData[field] !== undefined) {
+            itemData[field] = parseFloat(itemData[field]);
+          }
+        });
+
+        // Set creation timestamp
+        itemData.createdAt = Date.now();
+        itemData.lastUpdated = Date.now();
+
+        const item = new Item(itemData);
+        const newItem = await item.save();
+        res.status(201).json(newItem);
+      } catch (err) {
+        console.error("Error creating item:", err);
+        res.status(400).json({message: err.message});
+      }
+    });
+
+// Update an item
+router.patch("/:id", upload.single("image"),
+    uploadErrorHandler, uploadToFirebase, async (req, res) => {
+      try {
+        // Log the incoming data for debugging
+        console.log("Updating item:", req.params.id);
+        console.log("Request body fields:", Object.keys(req.body));
+        console.log("File received:", req.file ?
+          `${req.file.originalname} (${req.file.size} bytes)` : "No file");
+
+        // Process the item data
+        const itemData = {...req.body, lastUpdated: Date.now()};
+
+        // Handle tags (parse JSON string)
+        if (typeof req.body.tags === "string") {
+          try {
+            itemData.tags = JSON.parse(req.body.tags);
+          } catch (e) {
+            console.error("Error parsing tags JSON:", e);
+            itemData.tags = req.body.tags.split(",").map((tag) =>
+              tag.trim()).filter(Boolean);
+          }
+        }
+
+        // Add image URL if file was uploaded to Firebase
+        if (req.file && req.file.firebaseUrl) {
+          itemData.imageUrl = req.file.firebaseUrl;
+        }
+
+        // Convert numeric fields
+        ["quantity", "price", "weight", "cost"].forEach((field) => {
+          if (itemData[field] !== undefined) {
+            itemData[field] = parseFloat(itemData[field]);
+          }
+        });
+
+        // Use findByIdAndUpdate with proper options
         const item = await Item.findByIdAndUpdate(
             req.params.id,
             itemData,
+            {new: true, runValidators: true},
+        );
+
+        if (!item) {
+          return res.status(404).json({message: "Item not found"});
+        }
+
+        console.log("Item updated successfully");
+        res.json(item);
+      } catch (err) {
+        console.error("Error updating item:", err);
+        res.status(500).json({message: err.message});
+      }
+    });
+
+// Add a separate endpoint for image uploads only
+router.patch("/:id/image", upload.single("image"), uploadErrorHandler,
+    uploadToFirebase, async (req, res) => {
+      try {
+        console.log("Updating item image for:", req.params.id);
+
+        // Check if we have a file and it was uploaded to Firebase
+        if (!req.file || !req.file.firebaseUrl) {
+          return res.status(400).json({message: "No image file provided"});
+        }
+
+        // Update only the image URL field
+        const item = await Item.findByIdAndUpdate(
+            req.params.id,
+            {
+              imageUrl: req.file.firebaseUrl,
+              lastUpdated: Date.now(),
+            },
             {new: true},
         );
 
-        if (!item) return res.status(404).json({message: "Item not found"});
+        if (!item) {
+          return res.status(404).json({message: "Item not found"});
+        }
+
+        console.log("Item image updated successfully");
         res.json(item);
       } catch (err) {
-        res.status(400).json({message: err.message});
+        console.error("Error updating item image:", err);
+        res.status(500).json({message: err.message});
       }
     });
 

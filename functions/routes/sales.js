@@ -2,13 +2,13 @@ const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const mongoose = require("mongoose");
-const sale = require("../models/sale");
-const invItem = require("../models/item");
+const Sale = require("../models/sale");
+const Item = require("../models/item"); // Changed from invItem to Item
 
 // Get all sales
 router.get("/", async (req, res) => {
   try {
-    const sales = await sale.find().populate("items.item");
+    const sales = await Sale.find().populate("items.item");
     res.json(sales);
   } catch (err) {
     res.status(500).json({message: err.message});
@@ -18,7 +18,7 @@ router.get("/", async (req, res) => {
 // Get single sale
 router.get("/:id", async (req, res) => {
   try {
-    const sale = await sale.findById(req.params.id).populate("items.item");
+    const sale = await Sale.findById(req.params.id).populate("items.item");
     if (!sale) return res.status(404).json({message: "Sale not found"});
     res.json(sale);
   } catch (err) {
@@ -34,50 +34,50 @@ router.post("/", async (req, res) => {
   try {
     // Create the sale
     // eslint-disable-next-line new-cap
-    const sale = new sale(req.body);
+    const sale = new Sale(req.body);
     const newSale = await sale.save({session});
 
     // Update inventory for each item
     for (const saleItem of req.body.items) {
-      const invItem = await invItem.findById(saleItem.item);
-      if (!invItem) {
+      const item = await Item.findById(saleItem.item);
+      if (!item) {
         throw new Error(`Item with ID ${saleItem.item} not found`);
       }
 
       // Handle inventory update based on tracking type and price type
-      if (invItem.trackingType === "quantity") {
+      if (item.trackingType === "quantity") {
         // Check if enough stock is available
-        if (invItem.quantity < saleItem.quantity) {
+        if (item.quantity < saleItem.quantity) {
           throw new Error(
-              `Not enough stock for ${invItem.name}.
-               Available: ${invItem.quantity},
+              `Not enough stock for ${item.name}.
+               Available: ${item.quantity},
                Requested: ${saleItem.quantity}`,
           );
         }
 
         // Update inventory quantity
-        await invItem.findByIdAndUpdate(
+        await Item.findByIdAndUpdate(
             saleItem.item,
             {$inc: {quantity: -saleItem.quantity}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      } else if (invItem.trackingType === "weight") {
-        if (invItem.priceType === "each") {
+      } else if (item.trackingType === "weight") {
+        if (item.priceType === "each") {
           // Check if enough items are available
-          if (invItem.quantity < saleItem.quantity) {
+          if (item.quantity < saleItem.quantity) {
             throw new Error(
-                `Not enough stock for ${invItem.name}.
-                  Available: ${invItem.quantity},
+                `Not enough stock for ${item.name}.
+                  Available: ${item.quantity},
                   Requested: ${saleItem.quantity}`,
             );
           }
 
           // Calculate weight per item
-          const weightPerItem = invItem.weight / invItem.quantity;
+          const weightPerItem = item.weight / item.quantity;
           const totalWeightToDeduct = weightPerItem * saleItem.quantity;
 
           // Update both weight and quantity
-          await invItem.findByIdAndUpdate(
+          await Item.findByIdAndUpdate(
               saleItem.item,
               {
                 $inc: {
@@ -90,16 +90,16 @@ router.post("/", async (req, res) => {
           );
         } else {
           // Check if enough weight is available
-          if (invItem.weight < saleItem.weight) {
+          if (item.weight < saleItem.weight) {
             throw new Error(
-                `Not enough stock for ${invItem.name}.
-                 Available: ${invItem.weight} ${invItem.weightUnit},
+                `Not enough stock for ${item.name}.
+                 Available: ${item.weight} ${item.weightUnit},
                  Requested: ${saleItem.weight} ${saleItem.weightUnit}`,
             );
           }
 
           // Update inventory weight
-          await invItem.findByIdAndUpdate(
+          await Item.findByIdAndUpdate(
               saleItem.item,
               {$inc: {weight: -saleItem.weight}, lastUpdated: Date.now()},
               {session, new: true},
@@ -114,7 +114,7 @@ router.post("/", async (req, res) => {
 
     // Return the new sale with populated items
     const populatedSale =
-      await sale.findById(newSale._id).populate("items.item");
+      await Sale.findById(newSale._id).populate("items.item");
     res.status(201).json(populatedSale);
   } catch (err) {
     // Abort transaction on error
@@ -129,7 +129,7 @@ router.patch("/:id", async (req, res) => {
   try {
     // For simplicity, we"re not handling inventory adjustments on updates
     // In a production app, you"d need to handle inventory changes
-    const sale = await sale
+    const sale = await Sale
         .findByIdAndUpdate(req.params.id,
             {...req.body, updatedAt: Date.now()}, {new: true})
         .populate("items.item");
@@ -148,24 +148,24 @@ router.delete("/:id", async (req, res) => {
 
   try {
     // Get the sale to be deleted
-    const sale = await sale.findById(req.params.id);
+    const sale = await Sale.findById(req.params.id);
     if (!sale) {
       return res.status(404).json({message: "Sale not found"});
     }
 
     // Restore inventory quantities for each item in the sale
     for (const saleItem of sale.items) {
-      const item = await invItem.findById(saleItem.item);
+      const item = await Item.findById(saleItem.item);
       if (!item) continue; // Skip if item no longer exists
 
-      if (invItem.trackingType === "quantity" && saleItem.quantity) {
-        await invItem.findByIdAndUpdate(
+      if (item.trackingType === "quantity" && saleItem.quantity) {
+        await Item.findByIdAndUpdate(
             saleItem.item,
             {$inc: {quantity: saleItem.quantity}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      } else if (invItem.trackingType === "weight" && saleItem.weight) {
-        await invItem.findByIdAndUpdate(
+      } else if (item.trackingType === "weight" && saleItem.weight) {
+        await Item.findByIdAndUpdate(
             saleItem.item,
             {$inc: {weight: saleItem.weight}, lastUpdated: Date.now()},
             {session, new: true},
@@ -174,7 +174,7 @@ router.delete("/:id", async (req, res) => {
     }
 
     // Delete the sale
-    await sale.findByIdAndDelete(req.params.id, {session});
+    await Sale.findByIdAndDelete(req.params.id, {session});
 
     // Commit the transaction
     await session.commitTransaction();
@@ -201,7 +201,7 @@ router.get("/reports/by-date", async (req, res) => {
       if (endDate) query.createdAt.$lte = new Date(endDate);
     }
 
-    const sales = await sale.find(query).populate("items.item");
+    const sales = await Sale.find(query).populate("items.item");
 
     const report = {
       totalSales: sales.length,
