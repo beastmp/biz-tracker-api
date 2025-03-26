@@ -63,6 +63,49 @@ const ItemSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  itemType: {
+    type: String,
+    enum: ["material", "product", "both"],
+    default: "product",
+  },
+  // For tracking item cost separate from sale price
+  cost: {
+    type: Number,
+    default: 0,
+  },
+  // For materials tracking packaging information
+  packInfo: {
+    isPack: {
+      type: Boolean,
+      default: false,
+    },
+    unitsPerPack: {
+      type: Number,
+      default: 1,
+    },
+    costPerUnit: {
+      type: Number,
+      default: 0,
+    },
+  },
+  // For materials that can be used in products:
+  usedInProducts: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Item",
+  }],
+  // For products that are made from materials:
+  components: [{
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+    },
+    quantity: Number,
+    weight: Number,
+    weightUnit: {
+      type: String,
+      enum: ["oz", "lb", "g", "kg"],
+    },
+  }],
 });
 
 module.exports = mongoose.model("Item", ItemSchema);

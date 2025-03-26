@@ -37,6 +37,7 @@ router.post("/", async (req, res) => {
     const purchase = new Purchase(req.body);
     const newPurchase = await purchase.save({session});
 
+    // Enhance the purchase item processing logic (around line 39-65)
     // Update inventory for each item
     for (const purchaseItem of req.body.items) {
       const item = await Item.findById(purchaseItem.item);
@@ -44,38 +45,73 @@ router.post("/", async (req, res) => {
         throw new Error(`Item with ID ${purchaseItem.item} not found`);
       }
 
+      // Calculate inventory quantities based on pack information
+      let actualQuantity = purchaseItem.quantity;
+      let actualCostPerUnit = purchaseItem.costPerUnit;
+
+      // If this is a material with pack info, adjust quantities
+      if ((item.itemType === "material" || item.itemType === "both") &&
+          item.packInfo && item.packInfo.isPack === true) {
+        // Calculate actual units to add (packs × units per pack)
+        actualQuantity = purchaseItem.quantity * item.packInfo.unitsPerPack;
+
+        // Calculate the true cost per individual unit
+        actualCostPerUnit = purchaseItem.costPerUnit /
+          item.packInfo.unitsPerPack;
+      }
+
       // Handle inventory update based on tracking type and price type
       if (item.trackingType === "quantity") {
-        // Update inventory quantity
+        // Update inventory with the calculated actual quantity
         await Item.findByIdAndUpdate(
             purchaseItem.item,
-            {$inc: {quantity: purchaseItem.quantity}, lastUpdated: Date.now()},
+            {$inc: {quantity: actualQuantity}, lastUpdated: Date.now()},
             {session, new: true},
         );
       } else if (item.trackingType === "weight") {
+        // Adjust the logic for weight-tracked items as well
         if (item.priceType === "each") {
-          // Update both weight and quantity
-          // for weight-tracked items priced per item
           await Item.findByIdAndUpdate(
               purchaseItem.item,
               {
                 $inc: {
                   weight: purchaseItem.weight *
-                    purchaseItem.quantity, // Total weight
-                  quantity: purchaseItem.quantity, // Number of items
+                    actualQuantity, // Total weight adjusted for packs
+                  quantity: actualQuantity, // Adjusted quantity
                 },
                 lastUpdated: Date.now(),
               },
               {session, new: true},
           );
         } else {
-          // Update just weight for weight-tracked items priced per weight unit
           await Item.findByIdAndUpdate(
               purchaseItem.item,
               {$inc: {weight: purchaseItem.weight}, lastUpdated: Date.now()},
               {session, new: true},
           );
         }
+      }
+
+      // Update the item's cost with the correct per-unit cost
+      await Item.findByIdAndUpdate(
+          purchaseItem.item,
+          {
+            cost: actualCostPerUnit,
+            lastUpdated: Date.now(),
+          },
+          {session, new: true},
+      );
+
+      // Also update packInfo.costPerUnit directly with the calculated value
+      if ((item.itemType === "material" || item.itemType === "both") &&
+          item.packInfo && item.packInfo.isPack === true) {
+        await Item.findByIdAndUpdate(
+            purchaseItem.item,
+            {
+              "packInfo.costPerUnit": actualCostPerUnit,
+            },
+            {session, new: true},
+        );
       }
     }
 

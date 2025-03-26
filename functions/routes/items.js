@@ -168,12 +168,58 @@ router.patch("/:id", upload.single("image"),
           }
         });
 
-        // Use findByIdAndUpdate with proper options
+        // Get the old item BEFORE updating it
+        const oldItem = await Item.findById(req.params.id);
+        if (!oldItem) {
+          return res.status(404).json({message: "Item not found"});
+        }
+
+        // Extract old component IDs before updating
+        const oldComponentIds =
+          (oldItem.components && oldItem.components.map((c) =>
+              typeof c.item === "object" ?
+                c.item._id.toString() : c.item.toString(),
+          )) || [];
+
+        // Now update the item
         const item = await Item.findByIdAndUpdate(
             req.params.id,
             itemData,
             {new: true, runValidators: true},
         );
+
+        // Then handle component relationships with the correct old/new data
+        if (itemData.components && itemData.components.length > 0) {
+          // Get new component IDs
+          const newComponentIds = itemData.components.map((c) =>
+            typeof c.item === "object" ?
+              c.item._id.toString() : c.item.toString(),
+          );
+
+          // Materials to remove this product from
+          const removedComponentIds = oldComponentIds.filter((id) =>
+            !newComponentIds.includes(id));
+
+          // Materials to add this product to
+          const addedComponentIds = newComponentIds.filter((id) =>
+            !oldComponentIds.includes(id));
+
+          // Update usedInProducts for added materials
+          if (addedComponentIds.length > 0) {
+            await Item.updateMany(
+                {_id: {$in: addedComponentIds}},
+                {$addToSet: {usedInProducts: req.params.id}},
+            );
+          }
+
+          // Update usedInProducts for removed materials
+          if (removedComponentIds.length > 0) {
+            await Item.updateMany(
+                {_id: {$in: removedComponentIds}},
+                {$pull: {usedInProducts: req.params.id}},
+            );
+          }
+        }
 
         if (!item) {
           return res.status(404).json({message: "Item not found"});
