@@ -4,6 +4,11 @@ const router = express.Router();
 const Item = require("../models/item");
 const {upload, uploadToFirebase, uploadErrorHandler} =
   require("../utils/fileUpload");
+const {
+  extractComponentIds,
+  updateItemRelationships,
+  rebuildAllRelationships,
+} = require("../utils/itemRelationships");
 
 // Get all items
 router.get("/", async (req, res) => {
@@ -76,7 +81,19 @@ router.get("/tags", async (req, res) => {
 // Get single item
 router.get("/:id", async (req, res) => {
   try {
-    const item = await Item.findById(req.params.id);
+    const {populate} = req.query;
+
+    let query = Item.findById(req.params.id);
+
+    // Populate references if requested
+    if (populate === "true") {
+      // Populate components.item with full item details
+      query = query.populate("components.item");
+      // Populate usedInProducts with full product details
+      query = query.populate("usedInProducts");
+    }
+
+    const item = await query.exec();
     if (!item) return res.status(404).json({message: "Item not found"});
     res.json(item);
   } catch (err) {
@@ -107,6 +124,16 @@ router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
           }
         }
 
+        // Handle components if they exist (parse JSON string)
+        if (typeof itemData.components === "string") {
+          try {
+            itemData.components = JSON.parse(itemData.components);
+          } catch (e) {
+            console.error("Error parsing components JSON:", e);
+            itemData.components = [];
+          }
+        }
+
         // Add image URL if file was uploaded to Firebase
         if (req.file && req.file.firebaseUrl) {
           itemData.imageUrl = req.file.firebaseUrl;
@@ -125,6 +152,22 @@ router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
 
         const item = new Item(itemData);
         const newItem = await item.save();
+
+        // Update usedInProducts for materials consistently
+        if ((itemData.itemType === "product" || itemData.itemType === "both") &&
+            itemData.components && itemData.components.length > 0) {
+          const componentIds = extractComponentIds(itemData.components);
+
+          if (componentIds.length > 0) {
+            await Item.updateMany(
+                {_id: {$in: componentIds}},
+                {$addToSet: {usedInProducts: newItem._id}},
+            );
+            console.log(`Updated ${componentIds.length}
+              materials to reference new product ${newItem._id}`);
+          }
+        }
+
         res.status(201).json(newItem);
       } catch (err) {
         console.error("Error creating item:", err);
@@ -175,11 +218,7 @@ router.patch("/:id", upload.single("image"),
         }
 
         // Extract old component IDs before updating
-        const oldComponentIds =
-          (oldItem.components && oldItem.components.map((c) =>
-              typeof c.item === "object" ?
-                c.item._id.toString() : c.item.toString(),
-          )) || [];
+        const oldComponentIds = extractComponentIds(oldItem.components);
 
         // Now update the item
         const item = await Item.findByIdAndUpdate(
@@ -189,36 +228,14 @@ router.patch("/:id", upload.single("image"),
         );
 
         // Then handle component relationships with the correct old/new data
-        if (itemData.components && itemData.components.length > 0) {
-          // Get new component IDs
-          const newComponentIds = itemData.components.map((c) =>
-            typeof c.item === "object" ?
-              c.item._id.toString() : c.item.toString(),
-          );
+        if ((itemData.itemType === "product" || itemData.itemType === "both") &&
+            itemData.components && itemData.components.length > 0) {
+          // Get new component IDs consistently
+          const newComponentIds = extractComponentIds(itemData.components);
 
-          // Materials to remove this product from
-          const removedComponentIds = oldComponentIds.filter((id) =>
-            !newComponentIds.includes(id));
-
-          // Materials to add this product to
-          const addedComponentIds = newComponentIds.filter((id) =>
-            !oldComponentIds.includes(id));
-
-          // Update usedInProducts for added materials
-          if (addedComponentIds.length > 0) {
-            await Item.updateMany(
-                {_id: {$in: addedComponentIds}},
-                {$addToSet: {usedInProducts: req.params.id}},
-            );
-          }
-
-          // Update usedInProducts for removed materials
-          if (removedComponentIds.length > 0) {
-            await Item.updateMany(
-                {_id: {$in: removedComponentIds}},
-                {$pull: {usedInProducts: req.params.id}},
-            );
-          }
+          // Use imported utility function to update relationships
+          await updateItemRelationships(oldComponentIds,
+              newComponentIds, req.params.id);
         }
 
         if (!item) {
@@ -265,6 +282,93 @@ router.patch("/:id/image", upload.single("image"), uploadErrorHandler,
         res.status(500).json({message: err.message});
       }
     });
+
+// Utility endpoint to rebuild all product-material relationships
+router.post("/rebuild-relationships", async (req, res) => {
+  try {
+    // Use the imported utility function to rebuild relationships
+    const result = await rebuildAllRelationships();
+
+    res.json({
+      success: true,
+      message: `Relationship rebuilding complete.
+        Processed ${result.productsProcessed}
+        products and updated ${result.materialsUpdated} material references.`,
+    });
+  } catch (err) {
+    console.error("Error rebuilding relationships:", err);
+    res.status(500).json({message: err.message});
+  }
+});
+
+// Debug endpoint to inspect an item's relationships
+router.get("/:id/relationships", async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) return res.status(404).json({message: "Item not found"});
+
+    const relationships = {
+      item: {
+        _id: item._id,
+        name: item.name,
+        itemType: item.itemType,
+      },
+      components: [],
+      usedInProducts: [],
+    };
+
+    // Get component details if this is a product
+    if (item.components && item.components.length > 0) {
+      const componentDetails = await Promise.all(
+          item.components.map(async (comp) => {
+            const componentId = typeof comp.item === "object" ?
+              comp.item.toString() : comp.item;
+            const material = await Item.findById(componentId);
+            return {
+              componentId,
+              material: material ? {
+                _id: material._id,
+                name: material.name,
+                hasBackReference: material.usedInProducts &&
+                material.usedInProducts.some((p) =>
+                  p.toString() === item._id.toString()),
+              } : null,
+              quantity: comp.quantity,
+              weight: comp.weight,
+              weightUnit: comp.weightUnit,
+            };
+          }),
+      );
+      relationships.components = componentDetails;
+    }
+
+    // Get products that use this item if it's a material
+    if (item.usedInProducts && item.usedInProducts.length > 0) {
+      const productDetails = await Promise.all(
+          item.usedInProducts.map(async (productId) => {
+            const product = await Item.findById(productId);
+            return product ? {
+              _id: product._id,
+              name: product.name,
+              hasBackReference: product.components &&
+              product.components.some((c) => {
+                const compId = typeof c.item === "object" ?
+                  c.item.toString() : c.item;
+                return compId === item._id.toString();
+              }),
+            } : {_id: productId, name: "Unknown Product",
+              hasBackReference: false};
+          }),
+      );
+      relationships.usedInProducts = productDetails;
+    }
+
+    res.json(relationships);
+  } catch (err) {
+    console.error("Error getting item relationships:", err);
+    res.status(500).json({message: err.message});
+  }
+});
 
 // Delete item
 router.delete("/:id", async (req, res) => {
