@@ -55,45 +55,45 @@ router.post("/", async (req, res) => {
         actualQuantity = purchaseItem.quantity * item.packInfo.unitsPerPack;
 
         // Calculate the true cost per individual unit
-        actualCostPerUnit = purchaseItem.costPerUnit / item.packInfo.unitsPerPack;
+        actualCostPerUnit = purchaseItem.costPerUnit /
+          item.packInfo.unitsPerPack;
       }
 
       // Handle inventory update based on tracking type and purchase measurement
-      if (item.trackingType === "quantity" && purchaseItem.purchasedBy === "quantity") {
+      if (item.trackingType === "quantity" &&
+          purchaseItem.purchasedBy === "quantity") {
         // Update inventory with the calculated actual quantity
         await Item.findByIdAndUpdate(
             purchaseItem.item,
             {$inc: {quantity: actualQuantity}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      } else if (item.trackingType === "weight" && purchaseItem.purchasedBy === "weight") {
+      } else if (item.trackingType === "weight" &&
+          purchaseItem.purchasedBy === "weight") {
         // Update inventory weight
         await Item.findByIdAndUpdate(
             purchaseItem.item,
             {$inc: {weight: purchaseItem.weight}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      }
-      // Handle length measurement
-      else if (item.trackingType === "length" && purchaseItem.purchasedBy === "length") {
+      } else if (item.trackingType === "length" &&
+          purchaseItem.purchasedBy === "length") {
         // Update inventory length
         await Item.findByIdAndUpdate(
             purchaseItem.item,
             {$inc: {length: purchaseItem.length}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      }
-      // Handle area measurement
-      else if (item.trackingType === "area" && purchaseItem.purchasedBy === "area") {
+      } else if (item.trackingType === "area" &&
+          purchaseItem.purchasedBy === "area") {
         // Update inventory area
         await Item.findByIdAndUpdate(
             purchaseItem.item,
             {$inc: {area: purchaseItem.area}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      }
-      // Handle volume measurement
-      else if (item.trackingType === "volume" && purchaseItem.purchasedBy === "volume") {
+      } else if (item.trackingType === "volume" &&
+          purchaseItem.purchasedBy === "volume") {
         // Update inventory volume
         await Item.findByIdAndUpdate(
             purchaseItem.item,
@@ -101,7 +101,9 @@ router.post("/", async (req, res) => {
             {session, new: true},
         );
       } else {
-        throw new Error(`Measurement type mismatch for ${item.name}. Item tracks by ${item.trackingType} but purchase is using ${purchaseItem.purchasedBy}`);
+        throw new Error(`Measurement type mismatch for ${item.name}.
+          Item tracks by ${item.trackingType}
+          but purchase is using ${purchaseItem.purchasedBy}`);
       }
 
       // Update the item's cost with the correct per-unit cost
@@ -120,7 +122,8 @@ router.post("/", async (req, res) => {
     session.endSession();
 
     // Return the new purchase with populated items
-    const populatedPurchase = await Purchase.findById(newPurchase._id).populate("items.item");
+    const populatedPurchase =
+      await Purchase.findById(newPurchase._id).populate("items.item");
     res.status(201).json(populatedPurchase);
   } catch (err) {
     // Abort transaction on error
@@ -180,10 +183,12 @@ router.patch("/:id", async (req, res) => {
       const allItemIds = new Set([...originalItems.keys(), ...newItems.keys()]);
       for (const itemId of allItemIds) {
         const originalVals = originalItems.get(itemId) || {
-          quantity: 0, weight: 0, length: 0, area: 0, volume: 0, purchasedBy: "quantity",
+          quantity: 0, weight: 0, length: 0, area: 0, volume: 0,
+          purchasedBy: "quantity",
         };
         const newVals = newItems.get(itemId) || {
-          quantity: 0, weight: 0, length: 0, area: 0, volume: 0, purchasedBy: "quantity",
+          quantity: 0, weight: 0, length: 0, area: 0, volume: 0,
+          purchasedBy: "quantity",
         };
 
         // Calculate differences for all measurement types
@@ -248,7 +253,8 @@ router.delete("/:id", async (req, res) => {
 
     // Revert inventory quantities
     // for each item in the purchase if status is "received"
-    if (purchase.status === "received" || purchase.status === "partially_received") {
+    if (purchase.status === "received" ||
+        purchase.status === "partially_received") {
       for (const purchaseItem of purchase.items) {
         const item = await Item.findById(purchaseItem.item);
         if (!item) continue; // Skip if item no longer exists
@@ -256,7 +262,8 @@ router.delete("/:id", async (req, res) => {
         if (item.trackingType === "quantity" && purchaseItem.quantity) {
           await Item.findByIdAndUpdate(
               purchaseItem.item,
-              {$inc: {quantity: -purchaseItem.quantity}, lastUpdated: Date.now()},
+              {$inc: {quantity: -purchaseItem.quantity},
+                lastUpdated: Date.now()},
               {session, new: true},
           );
         } else if (item.trackingType === "weight" && purchaseItem.weight) {

@@ -88,7 +88,8 @@ const ItemSchema = new mongoose.Schema({
   },
   priceType: {
     type: String,
-    enum: ["each", "per_weight_unit", "per_length_unit", "per_area_unit", "per_volume_unit"],
+    enum: ["each", "per_weight_unit", "per_length_unit",
+      "per_area_unit", "per_volume_unit"],
     default: "each",
   },
   description: {
