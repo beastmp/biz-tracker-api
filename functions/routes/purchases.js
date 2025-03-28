@@ -169,7 +169,11 @@ router.patch("/:id", async (req, res) => {
 
       const newItems = new Map();
       req.body.items.forEach((item) => {
-        newItems.set(item.item.toString(), {
+        // Ensure item.item is converted to string properly,
+        // even if it's an object
+        const itemId = item.item._id ? item.item._id.toString() :
+        item.item.toString();
+        newItems.set(itemId, {
           quantity: item.quantity || 0,
           weight: item.weight || 0,
           length: item.length || 0,
@@ -201,26 +205,31 @@ router.patch("/:id", async (req, res) => {
         // Only update if there's a difference
         if (quantityDiff !== 0 || weightDiff !== 0 || lengthDiff !== 0 ||
             areaDiff !== 0 || volumeDiff !== 0) {
-          const item = await Item.findById(itemId);
-          if (item) {
-            const updateData = {lastUpdated: Date.now()};
+          try {
+            const item = await Item.findById(itemId);
+            if (item) {
+              const updateData = {lastUpdated: Date.now()};
 
-            // Set the appropriate increment based on the item's tracking type
-            if (item.trackingType === "quantity" && quantityDiff !== 0) {
-              updateData.$inc = {quantity: quantityDiff};
-            } else if (item.trackingType === "weight" && weightDiff !== 0) {
-              updateData.$inc = {weight: weightDiff};
-            } else if (item.trackingType === "length" && lengthDiff !== 0) {
-              updateData.$inc = {length: lengthDiff};
-            } else if (item.trackingType === "area" && areaDiff !== 0) {
-              updateData.$inc = {area: areaDiff};
-            } else if (item.trackingType === "volume" && volumeDiff !== 0) {
-              updateData.$inc = {volume: volumeDiff};
-            }
+              // Set the appropriate increment based on the item's tracking type
+              if (item.trackingType === "quantity" && quantityDiff !== 0) {
+                updateData.$inc = {quantity: quantityDiff};
+              } else if (item.trackingType === "weight" && weightDiff !== 0) {
+                updateData.$inc = {weight: weightDiff};
+              } else if (item.trackingType === "length" && lengthDiff !== 0) {
+                updateData.$inc = {length: lengthDiff};
+              } else if (item.trackingType === "area" && areaDiff !== 0) {
+                updateData.$inc = {area: areaDiff};
+              } else if (item.trackingType === "volume" && volumeDiff !== 0) {
+                updateData.$inc = {volume: volumeDiff};
+              }
 
-            if (updateData.$inc) {
-              await Item.findByIdAndUpdate(itemId, updateData, {session});
+              if (updateData.$inc) {
+                await Item.findByIdAndUpdate(itemId, updateData, {session});
+              }
             }
+          } catch (err) {
+            console.error(`Error updating item ${itemId}:`, err.message);
+            // Continue with other items even if this one fails
           }
         }
       }
