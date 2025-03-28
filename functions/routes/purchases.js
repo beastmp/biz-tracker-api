@@ -171,7 +171,7 @@ router.patch("/:id", async (req, res) => {
       req.body.items.forEach((item) => {
         // Ensure item.item is converted to string properly,
         // even if it's an object
-        const itemId = item.item._id ? item.item._id.toString() :
+        const itemId = item.item && item.item._id ? item.item._id.toString() :
         item.item.toString();
         newItems.set(itemId, {
           quantity: item.quantity || 0,
