@@ -8,20 +8,11 @@
  */
 
 const {onRequest} = require("firebase-functions/v2/https");
-// const logger = require("firebase-functions/logger");
-
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
-
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
-
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+
+const {initializeProviders} = require("./providers/init");
 
 const app = express();
 
@@ -46,16 +37,14 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI, {
-  serverSelectionTimeoutMS: 60000, // Increase from default 10000ms
-  socketTimeoutMS: 120000, // Increase socket timeout
-  connectTimeoutMS: 60000, // Connection timeout
-}).then(() => {
-  console.log("✅ Connected to MongoDB");
-}).catch((err) => {
-  console.error("❌ MongoDB connection error:", err);
-});
+// Initialize providers before starting the app
+initializeProviders()
+    .then(() => {
+      console.log("✅ All providers initialized successfully");
+    })
+    .catch((err) => {
+      console.error("❌ Failed to initialize providers:", err);
+    });
 
 // Mount routes under /api
 app.use("/api/items", require("./routes/items"));

@@ -2,7 +2,7 @@ const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const Item = require("../models/item");
-const {upload, uploadToFirebase, uploadErrorHandler} =
+const {upload, uploadErrorHandler, uploadToStorage} =
   require("../utils/fileUpload");
 const {
   extractComponentIds,
@@ -102,7 +102,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Create a new item
-router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
+router.post("/", upload.single("image"), uploadErrorHandler, uploadToStorage,
     async (req, res) => {
       try {
         console.log("Creating new item");
@@ -134,9 +134,9 @@ router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
           }
         }
 
-        // Add image URL if file was uploaded to Firebase
-        if (req.file && req.file.firebaseUrl) {
-          itemData.imageUrl = req.file.firebaseUrl;
+        // Add image URL if file was uploaded to storage
+        if (req.file && req.file.storageUrl) {
+          itemData.imageUrl = req.file.storageUrl;
         }
 
         // Convert numeric fields
@@ -177,7 +177,7 @@ router.post("/", upload.single("image"), uploadErrorHandler, uploadToFirebase,
 
 // Update an item
 router.patch("/:id", upload.single("image"),
-    uploadErrorHandler, uploadToFirebase, async (req, res) => {
+    uploadErrorHandler, uploadToStorage, async (req, res) => {
       try {
         // Log the incoming data for debugging
         console.log("Updating item:", req.params.id);
@@ -199,9 +199,9 @@ router.patch("/:id", upload.single("image"),
           }
         }
 
-        // Add image URL if file was uploaded to Firebase
-        if (req.file && req.file.firebaseUrl) {
-          itemData.imageUrl = req.file.firebaseUrl;
+        // Add image URL if file was uploaded to storage
+        if (req.file && req.file.storageUrl) {
+          itemData.imageUrl = req.file.storageUrl;
         }
 
         // Convert numeric fields
@@ -252,12 +252,12 @@ router.patch("/:id", upload.single("image"),
 
 // Add a separate endpoint for image uploads only
 router.patch("/:id/image", upload.single("image"), uploadErrorHandler,
-    uploadToFirebase, async (req, res) => {
+    uploadToStorage, async (req, res) => {
       try {
         console.log("Updating item image for:", req.params.id);
 
-        // Check if we have a file and it was uploaded to Firebase
-        if (!req.file || !req.file.firebaseUrl) {
+        // Check if we have a file and it was uploaded to storage
+        if (!req.file || !req.file.storageUrl) {
           return res.status(400).json({message: "No image file provided"});
         }
 
@@ -265,7 +265,7 @@ router.patch("/:id/image", upload.single("image"), uploadErrorHandler,
         const item = await Item.findByIdAndUpdate(
             req.params.id,
             {
-              imageUrl: req.file.firebaseUrl,
+              imageUrl: req.file.storageUrl,
               lastUpdated: Date.now(),
             },
             {new: true},
