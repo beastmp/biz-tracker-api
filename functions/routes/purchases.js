@@ -27,7 +27,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create new purchase
+// Create new purchase - add handling for the new measurement types
 router.post("/", async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -37,7 +37,6 @@ router.post("/", async (req, res) => {
     const purchase = new Purchase(req.body);
     const newPurchase = await purchase.save({session});
 
-    // Enhance the purchase item processing logic (around line 39-65)
     // Update inventory for each item
     for (const purchaseItem of req.body.items) {
       const item = await Item.findById(purchaseItem.item);
@@ -56,40 +55,53 @@ router.post("/", async (req, res) => {
         actualQuantity = purchaseItem.quantity * item.packInfo.unitsPerPack;
 
         // Calculate the true cost per individual unit
-        actualCostPerUnit = purchaseItem.costPerUnit /
-          item.packInfo.unitsPerPack;
+        actualCostPerUnit = purchaseItem.costPerUnit / item.packInfo.unitsPerPack;
       }
 
-      // Handle inventory update based on tracking type and price type
-      if (item.trackingType === "quantity") {
+      // Handle inventory update based on tracking type and purchase measurement
+      if (item.trackingType === "quantity" && purchaseItem.purchasedBy === "quantity") {
         // Update inventory with the calculated actual quantity
         await Item.findByIdAndUpdate(
             purchaseItem.item,
             {$inc: {quantity: actualQuantity}, lastUpdated: Date.now()},
             {session, new: true},
         );
-      } else if (item.trackingType === "weight") {
-        // Adjust the logic for weight-tracked items as well
-        if (item.priceType === "each") {
-          await Item.findByIdAndUpdate(
-              purchaseItem.item,
-              {
-                $inc: {
-                  weight: purchaseItem.weight *
-                    actualQuantity, // Total weight adjusted for packs
-                  quantity: actualQuantity, // Adjusted quantity
-                },
-                lastUpdated: Date.now(),
-              },
-              {session, new: true},
-          );
-        } else {
-          await Item.findByIdAndUpdate(
-              purchaseItem.item,
-              {$inc: {weight: purchaseItem.weight}, lastUpdated: Date.now()},
-              {session, new: true},
-          );
-        }
+      } else if (item.trackingType === "weight" && purchaseItem.purchasedBy === "weight") {
+        // Update inventory weight
+        await Item.findByIdAndUpdate(
+            purchaseItem.item,
+            {$inc: {weight: purchaseItem.weight}, lastUpdated: Date.now()},
+            {session, new: true},
+        );
+      }
+      // Handle length measurement
+      else if (item.trackingType === "length" && purchaseItem.purchasedBy === "length") {
+        // Update inventory length
+        await Item.findByIdAndUpdate(
+            purchaseItem.item,
+            {$inc: {length: purchaseItem.length}, lastUpdated: Date.now()},
+            {session, new: true},
+        );
+      }
+      // Handle area measurement
+      else if (item.trackingType === "area" && purchaseItem.purchasedBy === "area") {
+        // Update inventory area
+        await Item.findByIdAndUpdate(
+            purchaseItem.item,
+            {$inc: {area: purchaseItem.area}, lastUpdated: Date.now()},
+            {session, new: true},
+        );
+      }
+      // Handle volume measurement
+      else if (item.trackingType === "volume" && purchaseItem.purchasedBy === "volume") {
+        // Update inventory volume
+        await Item.findByIdAndUpdate(
+            purchaseItem.item,
+            {$inc: {volume: purchaseItem.volume}, lastUpdated: Date.now()},
+            {session, new: true},
+        );
+      } else {
+        throw new Error(`Measurement type mismatch for ${item.name}. Item tracks by ${item.trackingType} but purchase is using ${purchaseItem.purchasedBy}`);
       }
 
       // Update the item's cost with the correct per-unit cost
@@ -101,18 +113,6 @@ router.post("/", async (req, res) => {
           },
           {session, new: true},
       );
-
-      // Also update packInfo.costPerUnit directly with the calculated value
-      if ((item.itemType === "material" || item.itemType === "both") &&
-          item.packInfo && item.packInfo.isPack === true) {
-        await Item.findByIdAndUpdate(
-            purchaseItem.item,
-            {
-              "packInfo.costPerUnit": actualCostPerUnit,
-            },
-            {session, new: true},
-        );
-      }
     }
 
     // Commit the transaction
@@ -120,8 +120,7 @@ router.post("/", async (req, res) => {
     session.endSession();
 
     // Return the new purchase with populated items
-    const populatedPurchase =
-      await Purchase.findById(newPurchase._id).populate("items.item");
+    const populatedPurchase = await Purchase.findById(newPurchase._id).populate("items.item");
     res.status(201).json(populatedPurchase);
   } catch (err) {
     // Abort transaction on error
@@ -152,61 +151,66 @@ router.patch("/:id", async (req, res) => {
 
     // Handle inventory adjustments if items changed
     if (req.body.items) {
-      // Create maps of quantities by item ID for comparison
+      // Create maps of measurements by item ID for comparison
       const originalItems = new Map();
       originalPurchase.items.forEach((item) => {
-        if (item.item.toString() in originalItems) {
-          if (item.quantity) {
-            originalItems.get(item.item.toString()).quantity += item.quantity;
-          }
-          if (item.weight) {
-            originalItems.get(item.item.toString()).weight += item.weight;
-          }
-        } else {
-          originalItems.set(item.item.toString(), {
-            quantity: item.quantity || 0,
-            weight: item.weight || 0,
-          });
-        }
+        originalItems.set(item.item.toString(), {
+          quantity: item.quantity || 0,
+          weight: item.weight || 0,
+          length: item.length || 0,
+          area: item.area || 0,
+          volume: item.volume || 0,
+          purchasedBy: item.purchasedBy || "quantity",
+        });
       });
 
       const newItems = new Map();
       req.body.items.forEach((item) => {
-        if (item.item.toString() in newItems) {
-          if (item.quantity) {
-            newItems.get(item.item.toString()).quantity += item.quantity;
-          }
-          if (item.weight) {
-            newItems.get(item.item.toString()).weight += item.weight;
-          }
-        } else {
-          newItems.set(item.item.toString(), {
-            quantity: item.quantity || 0,
-            weight: item.weight || 0,
-          });
-        }
+        newItems.set(item.item.toString(), {
+          quantity: item.quantity || 0,
+          weight: item.weight || 0,
+          length: item.length || 0,
+          area: item.area || 0,
+          volume: item.volume || 0,
+          purchasedBy: item.purchasedBy || "quantity",
+        });
       });
 
       // Adjust inventory based on differences
       const allItemIds = new Set([...originalItems.keys(), ...newItems.keys()]);
       for (const itemId of allItemIds) {
-        const originalVals =
-          originalItems.get(itemId) || {quantity: 0, weight: 0};
-        const newVals = newItems.get(itemId) || {quantity: 0, weight: 0};
+        const originalVals = originalItems.get(itemId) || {
+          quantity: 0, weight: 0, length: 0, area: 0, volume: 0, purchasedBy: "quantity",
+        };
+        const newVals = newItems.get(itemId) || {
+          quantity: 0, weight: 0, length: 0, area: 0, volume: 0, purchasedBy: "quantity",
+        };
 
+        // Calculate differences for all measurement types
         const quantityDiff = newVals.quantity - originalVals.quantity;
         const weightDiff = newVals.weight - originalVals.weight;
+        const lengthDiff = newVals.length - originalVals.length;
+        const areaDiff = newVals.area - originalVals.area;
+        const volumeDiff = newVals.volume - originalVals.volume;
 
-        if (quantityDiff !== 0 || weightDiff !== 0) {
+        // Only update if there's a difference
+        if (quantityDiff !== 0 || weightDiff !== 0 || lengthDiff !== 0 ||
+            areaDiff !== 0 || volumeDiff !== 0) {
           const item = await Item.findById(itemId);
-
           if (item) {
             const updateData = {lastUpdated: Date.now()};
 
+            // Set the appropriate increment based on the item's tracking type
             if (item.trackingType === "quantity" && quantityDiff !== 0) {
               updateData.$inc = {quantity: quantityDiff};
             } else if (item.trackingType === "weight" && weightDiff !== 0) {
               updateData.$inc = {weight: weightDiff};
+            } else if (item.trackingType === "length" && lengthDiff !== 0) {
+              updateData.$inc = {length: lengthDiff};
+            } else if (item.trackingType === "area" && areaDiff !== 0) {
+              updateData.$inc = {area: areaDiff};
+            } else if (item.trackingType === "volume" && volumeDiff !== 0) {
+              updateData.$inc = {volume: volumeDiff};
             }
 
             if (updateData.$inc) {
@@ -244,8 +248,7 @@ router.delete("/:id", async (req, res) => {
 
     // Revert inventory quantities
     // for each item in the purchase if status is "received"
-    if (purchase.status === "received" ||
-        purchase.status === "partially_received") {
+    if (purchase.status === "received" || purchase.status === "partially_received") {
       for (const purchaseItem of purchase.items) {
         const item = await Item.findById(purchaseItem.item);
         if (!item) continue; // Skip if item no longer exists
@@ -253,14 +256,31 @@ router.delete("/:id", async (req, res) => {
         if (item.trackingType === "quantity" && purchaseItem.quantity) {
           await Item.findByIdAndUpdate(
               purchaseItem.item,
-              {$inc: {quantity: -purchaseItem.quantity},
-                lastUpdated: Date.now()},
+              {$inc: {quantity: -purchaseItem.quantity}, lastUpdated: Date.now()},
               {session, new: true},
           );
         } else if (item.trackingType === "weight" && purchaseItem.weight) {
           await Item.findByIdAndUpdate(
               purchaseItem.item,
               {$inc: {weight: -purchaseItem.weight}, lastUpdated: Date.now()},
+              {session, new: true},
+          );
+        } else if (item.trackingType === "length" && purchaseItem.length) {
+          await Item.findByIdAndUpdate(
+              purchaseItem.item,
+              {$inc: {length: -purchaseItem.length}, lastUpdated: Date.now()},
+              {session, new: true},
+          );
+        } else if (item.trackingType === "area" && purchaseItem.area) {
+          await Item.findByIdAndUpdate(
+              purchaseItem.item,
+              {$inc: {area: -purchaseItem.area}, lastUpdated: Date.now()},
+              {session, new: true},
+          );
+        } else if (item.trackingType === "volume" && purchaseItem.volume) {
+          await Item.findByIdAndUpdate(
+              purchaseItem.item,
+              {$inc: {volume: -purchaseItem.volume}, lastUpdated: Date.now()},
               {session, new: true},
           );
         }

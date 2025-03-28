@@ -20,7 +20,7 @@ const ItemSchema = new mongoose.Schema({
   trackingType: {
     type: String,
     required: true,
-    enum: ["quantity", "weight"],
+    enum: ["quantity", "weight", "length", "area", "volume"],
     default: "quantity",
   },
   quantity: {
@@ -36,25 +36,69 @@ const ItemSchema = new mongoose.Schema({
     enum: ["oz", "lb", "g", "kg"],
     default: "lb",
   },
+  length: {
+    type: Number,
+    default: 0,
+  },
+  lengthUnit: {
+    type: String,
+    enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    default: "in",
+  },
+  area: {
+    type: Number,
+    default: 0,
+  },
+  areaUnit: {
+    type: String,
+    enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    default: "sqft",
+  },
+  volume: {
+    type: Number,
+    default: 0,
+  },
+  volumeUnit: {
+    type: String,
+    enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    default: "l",
+  },
+  sellByMeasurement: {
+    type: String,
+    enum: ["quantity", "weight", "length", "area", "volume"],
+    default: null,
+  },
+  packageSize: {
+    value: {
+      type: Number,
+      default: 0,
+    },
+    unit: {
+      type: String,
+      default: null,
+    },
+    quantityPerPackage: {
+      type: Number,
+      default: 1,
+    },
+  },
   price: {
     type: Number,
     required: true,
   },
   priceType: {
     type: String,
-    enum: ["each", "per_weight_unit"],
+    enum: ["each", "per_weight_unit", "per_length_unit", "per_area_unit", "per_volume_unit"],
     default: "each",
   },
   description: {
     type: String,
     trim: true,
   },
-  // Add image URL field
   imageUrl: {
     type: String,
     default: null,
   },
-  // Add tags array
   tags: [{
     type: String,
     trim: true,
@@ -68,12 +112,10 @@ const ItemSchema = new mongoose.Schema({
     enum: ["material", "product", "both"],
     default: "product",
   },
-  // For tracking item cost separate from sale price
   cost: {
     type: Number,
     default: 0,
   },
-  // For materials tracking packaging information
   packInfo: {
     isPack: {
       type: Boolean,
@@ -88,12 +130,10 @@ const ItemSchema = new mongoose.Schema({
       default: 0,
     },
   },
-  // For materials that can be used in products:
   usedInProducts: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Item",
   }],
-  // For products that are made from materials:
   components: [{
     item: {
       type: mongoose.Schema.Types.ObjectId,

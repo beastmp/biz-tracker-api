@@ -19,6 +19,34 @@ const PurchaseItemSchema = new mongoose.Schema({
   weightUnit: {
     type: String,
     enum: ["oz", "lb", "g", "kg"],
+    default: "lb",
+  },
+  length: {
+    type: Number,
+    default: 0,
+  },
+  lengthUnit: {
+    type: String,
+    enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    default: "in",
+  },
+  area: {
+    type: Number,
+    default: 0,
+  },
+  areaUnit: {
+    type: String,
+    enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    default: "sqft",
+  },
+  volume: {
+    type: Number,
+    default: 0,
+  },
+  volumeUnit: {
+    type: String,
+    enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    default: "l",
   },
   costPerUnit: {
     type: Number,
@@ -29,6 +57,25 @@ const PurchaseItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0,
+  },
+  purchasedBy: {
+    type: String,
+    enum: ["quantity", "weight", "length", "area", "volume"],
+    default: "quantity",
+  },
+  packageInfo: {
+    isPackage: {
+      type: Boolean,
+      default: false,
+    },
+    packageSize: {
+      value: Number,
+      unit: String,
+    },
+    quantityPerPackage: {
+      type: Number,
+      default: 1,
+    },
   },
 });
 

@@ -6,6 +6,10 @@ const SaleItemSchema = new mongoose.Schema({
     ref: "Item",
     required: true,
   },
+  name: {
+    type: String,
+    required: true,
+  },
   quantity: {
     type: Number,
     min: 0,
@@ -19,10 +23,45 @@ const SaleItemSchema = new mongoose.Schema({
   weightUnit: {
     type: String,
     enum: ["oz", "lb", "g", "kg"],
+    default: "lb",
+  },
+  // Add new measurement fields
+  length: {
+    type: Number,
+    default: 0,
+  },
+  lengthUnit: {
+    type: String,
+    enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    default: "in",
+  },
+  area: {
+    type: Number,
+    default: 0,
+  },
+  areaUnit: {
+    type: String,
+    enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    default: "sqft",
+  },
+  volume: {
+    type: Number,
+    default: 0,
+  },
+  volumeUnit: {
+    type: String,
+    enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    default: "l",
   },
   priceAtSale: {
     type: Number,
     required: true,
+  },
+  // Add this field to track what measurement is used for this sale
+  soldBy: {
+    type: String,
+    enum: ["quantity", "weight", "length", "area", "volume"],
+    default: "quantity",
   },
 });
 
