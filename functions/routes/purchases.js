@@ -20,9 +20,27 @@ router.get("/:id", async (req, res) => {
   try {
     const purchase =
       await Purchase.findById(req.params.id).populate("items.item");
-    if (!purchase) return res.status(404).json({message: "Purchase not found"});
-    res.json(purchase);
+    if (!purchase) {
+      return res.status(404).json({message: "Purchase not found"});
+    }
+
+    // You may want to add a virtual property or transformer
+    // that shows a summary of discounts
+    const itemDiscountTotal = purchase.items.reduce(
+        (sum, item) => sum + (item.discountAmount || 0), 0,
+    );
+
+    // Add a summary property to the response
+    const result = purchase.toObject();
+    result.summary = {
+      itemDiscountTotal: parseFloat(itemDiscountTotal.toFixed(2)),
+      totalDiscount: parseFloat((itemDiscountTotal +
+        purchase.discountAmount).toFixed(2)),
+    };
+
+    res.json(result);
   } catch (err) {
+    console.error("Error fetching purchase:", err);
     res.status(500).json({message: err.message});
   }
 });
@@ -33,7 +51,68 @@ router.post("/", async (req, res) => {
   session.startTransaction();
 
   try {
-    // Create the purchase
+    // Verify or calculate purchase totals based on items including discounts
+    if (req.body.items && req.body.items.length > 0) {
+      let calculatedSubtotal = 0;
+
+      // Process each item and verify calculations
+      req.body.items.forEach((item) => {
+        // Calculate base amount before discount
+        let baseItemAmount = 0;
+        switch (item.purchasedBy) {
+          case "weight":
+            baseItemAmount = item.weight * item.costPerUnit;
+            break;
+          case "length":
+            baseItemAmount = item.length * item.costPerUnit;
+            break;
+          case "area":
+            baseItemAmount = item.area * item.costPerUnit;
+            break;
+          case "volume":
+            baseItemAmount = item.volume * item.costPerUnit;
+            break;
+          default: // quantity
+            baseItemAmount = item.quantity * item.costPerUnit;
+        }
+
+        // Set discounts if not provided
+        if (item.discountAmount === undefined) item.discountAmount = 0;
+        if (item.discountPercentage === undefined) item.discountPercentage = 0;
+
+        // Validate and ensure discount calculations are correct
+        if (item.discountPercentage > 0) {
+          // If percentage is specified, calculate amount
+          item.discountAmount = (item.discountPercentage / 100) *
+            baseItemAmount;
+        } else if (item.discountAmount > 0) {
+          // If amount is specified, calculate percentage
+          item.discountPercentage = baseItemAmount > 0 ?
+            (item.discountAmount / baseItemAmount) * 100 : 0;
+        }
+
+        // Ensure total cost reflects the discount
+        const calculatedTotalCost = Math.max(0, baseItemAmount -
+          item.discountAmount);
+        item.totalCost = parseFloat(calculatedTotalCost.toFixed(2));
+
+        // Add to running subtotal
+        calculatedSubtotal += item.totalCost;
+      });
+
+      // Set the subtotal
+      req.body.subtotal = parseFloat(calculatedSubtotal.toFixed(2));
+
+      // Calculate final total with purchase-level adjustments
+      const taxAmount = (req.body.taxRate / 100) * req.body.subtotal;
+      const calculatedTotal = req.body.subtotal -
+        (req.body.discountAmount || 0) +
+          taxAmount + (req.body.shippingCost || 0);
+      req.body.total = parseFloat(calculatedTotal.toFixed(2));
+      req.body.taxAmount = parseFloat(taxAmount.toFixed(2));
+    }
+
+    // Create the purchase with updated calculations
     const purchase = new Purchase(req.body);
     const newPurchase = await purchase.save({session});
 
@@ -139,13 +218,74 @@ router.patch("/:id", async (req, res) => {
   session.startTransaction();
 
   try {
-    // Get the original purchase for comparison
+    // Get the original purchase for inventory comparison
     const originalPurchase = await Purchase.findById(req.params.id);
     if (!originalPurchase) {
       return res.status(404).json({message: "Purchase not found"});
     }
 
-    // Update the purchase
+    // Process items with discounts if they're in the request
+    if (req.body.items && req.body.items.length > 0) {
+      let calculatedSubtotal = 0;
+
+      // Process each item and verify calculations
+      req.body.items.forEach((item) => {
+        // Calculate base amount before discount
+        let baseItemAmount = 0;
+        switch (item.purchasedBy) {
+          case "weight":
+            baseItemAmount = item.weight * item.costPerUnit;
+            break;
+          case "length":
+            baseItemAmount = item.length * item.costPerUnit;
+            break;
+          case "area":
+            baseItemAmount = item.area * item.costPerUnit;
+            break;
+          case "volume":
+            baseItemAmount = item.volume * item.costPerUnit;
+            break;
+          default: // quantity
+            baseItemAmount = item.quantity * item.costPerUnit;
+        }
+
+        // Set discounts if not provided
+        if (item.discountAmount === undefined) item.discountAmount = 0;
+        if (item.discountPercentage === undefined) item.discountPercentage = 0;
+
+        // Validate and ensure discount calculations are correct
+        if (item.discountPercentage > 0) {
+          // If percentage is specified, calculate amount
+          item.discountAmount = (item.discountPercentage / 100) *
+            baseItemAmount;
+        } else if (item.discountAmount > 0) {
+          // If amount is specified, calculate percentage
+          item.discountPercentage = baseItemAmount > 0 ?
+            (item.discountAmount / baseItemAmount) * 100 : 0;
+        }
+
+        // Ensure total cost reflects the discount
+        const calculatedTotalCost = Math.max(0, baseItemAmount -
+          item.discountAmount);
+        item.totalCost = parseFloat(calculatedTotalCost.toFixed(2));
+
+        // Add to running subtotal
+        calculatedSubtotal += item.totalCost;
+      });
+
+      // Set the subtotal
+      req.body.subtotal = parseFloat(calculatedSubtotal.toFixed(2));
+
+      // Calculate final total with purchase-level adjustments
+      const taxAmount = ((req.body.taxRate || 0) / 100) * req.body.subtotal;
+      const calculatedTotal = req.body.subtotal -
+        (req.body.discountAmount || 0) + taxAmount +
+          (req.body.shippingCost || 0);
+      req.body.total = parseFloat(calculatedTotal.toFixed(2));
+      req.body.taxAmount = parseFloat(taxAmount.toFixed(2));
+    }
+
+    // Update the purchase with the modified data
     const updatedPurchase = await Purchase.findByIdAndUpdate(
         req.params.id,
         {...req.body, updatedAt: Date.now()},
