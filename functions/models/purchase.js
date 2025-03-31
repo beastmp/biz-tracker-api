@@ -62,6 +62,17 @@ const PurchaseItemSchema = new mongoose.Schema({
     required: true,
     min: 0,
   },
+  // Add discount fields to schema
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  discountPercentage: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   purchasedBy: {
     type: String,
     enum: ["quantity", "weight", "length", "area", "volume"],
