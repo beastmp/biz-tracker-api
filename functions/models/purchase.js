@@ -48,6 +48,10 @@ const PurchaseItemSchema = new mongoose.Schema({
     enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
     default: "l",
   },
+  originalCost: {
+    type: Number,
+    min: 0,
+  },
   costPerUnit: {
     type: Number,
     required: true,
