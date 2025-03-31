@@ -1,5 +1,8 @@
+/**
+ * File Upload Middleware
+ */
 const multer = require("multer");
-const {storageProvider} = require("../providers/init");
+const {getProviderFactory} = require("../providers");
 
 // Configure multer for memory storage
 const upload = multer({
@@ -11,8 +14,8 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Check file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif",
-      "image/jpg", "image/webp"];
+    const allowedTypes = ["image/jpeg", "image/png",
+      "image/gif", "image/jpg", "image/webp"];
     if (!allowedTypes.includes(file.mimetype)) {
       return cb(new Error("Only JPEG, PNG, GIF and WebP images are allowed"));
     }
@@ -35,17 +38,18 @@ const uploadErrorHandler = (err, req, res, next) => {
   next();
 };
 
-// Upload to storage using the provider
+// Upload to storage using the provider factory
 const uploadToStorage = async (req, res, next) => {
   // If no file was uploaded or upload was skipped, just continue
   if (!req.file) {
-    console.log("No file in request, skipping storage upload");
     return next();
   }
 
   try {
     console.log(`Processing file upload: ${req.file.originalname},
       ${req.file.mimetype}, ${req.file.size} bytes`);
+
+    const storageProvider = getProviderFactory().getStorageProvider();
 
     // Upload file using the configured storage provider
     const fileUrl = await storageProvider.uploadFile(

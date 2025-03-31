@@ -1,43 +1,86 @@
+/**
+ * Configuration for providers
+ * Centralizes all configuration values and validates required ones
+ */
 require("dotenv").config();
 
-// Database provider configs
-const databaseConfig = {
-  // Default provider
-  default: process.env.DATABASE_PROVIDER || "mongodb",
+// Required environment variables
+const requiredVars = [
+  "DB_URI",
+  "DB_PROVIDER",
+  "STORAGE_PROVIDER",
+  "STORAGE_BUCKET",
+];
 
-  // Provider-specific configurations
-  providers: {
-    mongodb: {
-      uri: process.env.MONGODB_URI,
-      options: {
-        serverSelectionTimeoutMS: 60000,
-        socketTimeoutMS: 120000,
-        connectTimeoutMS: 60000,
-      },
-    },
-    // Add DynamoDB config here when needed
-  },
+// Default values for optional configuration
+const defaultConfig = {
+  DB_PROVIDER: "mongodb",
+  STORAGE_PROVIDER: "firebase",
+  NODE_ENV: "development",
+  PORT: 3000,
+  SKIP_AUTH: false,
+  ENABLE_TRANSACTION_LOGGING: false,
 };
 
-// Storage provider configs
-const storageConfig = {
-  // Default provider
-  default: process.env.STORAGE_PROVIDER || "firebase",
+// Check for missing required variables
+const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required environment variables:
+    ${missingVars.join(", ")}`);
+  console.error("Please check your .env file or environment configuration");
+  process.exit(1);
+}
 
-  // Provider-specific configurations
-  providers: {
-    firebase: {
-      bucketName: process.env.STORAGE_BUCKET,
-      storagePath: "inventory",
-      // Service account path for local development
-      serviceAccount: process.env.NODE_ENV === "development" ?
-        require("../../firebase-credentials.json") : null,
-    },
-    // Add S3 config here when needed
-  },
+// Create configuration object with fallbacks to defaults
+const config = {
+  // Database configuration
+  DB_URI: process.env.DB_URI,
+  DB_PROVIDER: process.env.DB_PROVIDER || defaultConfig.DB_PROVIDER,
+
+  // Storage configuration
+  STORAGE_PROVIDER: process.env.STORAGE_PROVIDER ||
+    defaultConfig.STORAGE_PROVIDER,
+  STORAGE_BUCKET: process.env.STORAGE_BUCKET,
+
+  // AWS S3 configuration (if using S3 provider)
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+  AWS_REGION: process.env.AWS_REGION || "us-east-1",
+
+  // Application configuration
+  NODE_ENV: process.env.NODE_ENV || defaultConfig.NODE_ENV,
+  PORT: parseInt(process.env.PORT || defaultConfig.PORT, 10),
+
+  // Security configuration
+  SKIP_AUTH: process.env.SKIP_AUTH === "true" || defaultConfig.SKIP_AUTH,
+
+  // Feature flags
+  ENABLE_TRANSACTION_LOGGING:
+    process.env.ENABLE_TRANSACTION_LOGGING === "true" ||
+      defaultConfig.ENABLE_TRANSACTION_LOGGING,
 };
 
-module.exports = {
-  database: databaseConfig,
-  storage: storageConfig,
-};
+// Validate provider-specific required config
+if (config.STORAGE_PROVIDER === "s3") {
+  const requiredS3Vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+    "STORAGE_BUCKET"];
+  const missingS3Vars = requiredS3Vars.filter((varName) =>
+    !process.env[varName]);
+
+  if (missingS3Vars.length > 0) {
+    console.warn(`⚠️ Using S3 storage provider but
+      missing: ${missingS3Vars.join(", ")}`);
+    console.warn(`S3 storage operations may fail.
+      Please check your configuration.`);
+  }
+}
+
+if (config.STORAGE_PROVIDER === "firebase" &&
+    !process.env.STORAGE_BUCKET) {
+  console.warn(`⚠️ Using Firebase storage provider
+    but STORAGE_BUCKET is not set`);
+  console.warn(`Firebase storage operations may fail.
+    Please check your configuration.`);
+}
+
+module.exports = config;

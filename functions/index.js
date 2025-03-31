@@ -7,29 +7,25 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-const {onRequest} = require("firebase-functions/v2/https");
+const functions = require("firebase-functions");
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 
-const {initializeProviders} = require("./providers/init");
+const {initializeProviders} = require("./providers");
+const {errorHandler} = require("./middleware");
 
 const app = express();
 
-// CORS configuration with specific origins
-app.use(cors({
-  origin: [
-    "http://localhost:5173", // Vite dev server
-    "http://localhost:5000", // Local Firebase emulator
-    "https://biz-tracker-a5562.web.app",
-    "https://biz-tracker-a5562.firebaseapp.com",
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-requested-with"],
-}));
-
+// Middleware
+app.use(cors());
 app.use(express.json());
+
+// // Mock authentication middleware - replace with actual auth in production
+// app.use((req, res, next) => {
+//   req.user = {businessId: "default"};
+//   next();
+// });
 
 // Strip the /api prefix from incoming requests
 app.use("/api", (req, res, next) => {
@@ -37,33 +33,52 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-// Initialize providers before starting the app
-initializeProviders()
-    .then(() => {
-      console.log("✅ All providers initialized successfully");
-    })
-    .catch((err) => {
-      console.error("❌ Failed to initialize providers:", err);
-    });
-
-// Mount routes under /api
-app.use("/api/items", require("./routes/items"));
-app.use("/api/sales", require("./routes/sales"));
-app.use("/api/purchases", require("./routes/purchases"));
-
 // Default route
 app.get("/", (req, res) => {
   res.send("Biz-Tracker API is running");
 });
 
-// Export the Express app as a Firebase Cloud Function with CORS configuration
-exports.api = onRequest({
-  cors: [
-    "http://localhost:5173",
-    "http://localhost:5000",
-    "https://biz-tracker-a5562.web.app",
-    "https://biz-tracker-a5562.firebaseapp.com",
-  ],
-  maxInstances: 10,
-  timeoutSeconds: 540,
-}, app);
+// Initialize providers before setting up routes
+const setupApp = async () => {
+  try {
+    // Initialize providers first
+    await initializeProviders();
+    console.log("✅ All providers initialized successfully");
+
+    // Import routes after provider initialization
+    const salesRoutes = require("./routes/sales");
+    const purchasesRoutes = require("./routes/purchases");
+    const itemsRoutes = require("./routes/items");
+    const healthRoutes = require("./routes/health");
+
+    // Routes
+    app.use("/api/sales", salesRoutes);
+    app.use("/api/purchases", purchasesRoutes);
+    app.use("/api/items", itemsRoutes);
+    app.use("/api/health", healthRoutes);
+
+    // Error handler
+    app.use(errorHandler);
+
+    console.log("Application setup complete");
+
+    // Start the server if running directly
+    if (require.main === module) {
+      const PORT = process.env.PORT || 3000;
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
+    }
+  } catch (error) {
+    console.error("Failed to initialize application:", error);
+    throw error;
+  }
+};
+
+// Call setup and export the app
+setupApp()
+    .then(() => console.log("API ready"))
+    .catch((err) => console.error("API setup failed:", err));
+
+// Export the Express app as a Firebase Cloud Function
+exports.api = functions.https.onRequest(app);

@@ -1,4 +1,4 @@
-const Item = require("../models/item");
+const {getProviderFactory} = require("../providers");
 
 /**
  * Extracts component IDs consistently from an array of components
@@ -22,6 +22,8 @@ const extractComponentIds = (components) => {
  * @return {Promise<void>}
  */
 const updateItemRelationships = async (oldIds, newIds, productId) => {
+  const itemRepository = getProviderFactory().getItemRepository();
+
   // Materials to remove this product from
   const removedComponentIds = oldIds.filter((id) => !newIds.includes(id));
 
@@ -30,22 +32,32 @@ const updateItemRelationships = async (oldIds, newIds, productId) => {
 
   // Update usedInProducts for added materials
   if (addedComponentIds.length > 0) {
-    await Item.updateMany(
-        {_id: {$in: addedComponentIds}},
-        {$addToSet: {usedInProducts: productId}},
-    );
+    for (const componentId of addedComponentIds) {
+      const component = await itemRepository.findById(componentId);
+      if (component) {
+        const usedInProducts = component.usedInProducts || [];
+        if (!usedInProducts.includes(productId)) {
+          usedInProducts.push(productId);
+          await itemRepository.update(componentId, {usedInProducts});
+        }
+      }
+    }
     console.log(`Added product ${productId}
-        to ${addedComponentIds.length} materials`);
+      to ${addedComponentIds.length} materials`);
   }
 
   // Update usedInProducts for removed materials
   if (removedComponentIds.length > 0) {
-    await Item.updateMany(
-        {_id: {$in: removedComponentIds}},
-        {$pull: {usedInProducts: productId}},
-    );
+    for (const componentId of removedComponentIds) {
+      const component = await itemRepository.findById(componentId);
+      if (component) {
+        const usedInProducts = (component.usedInProducts || [])
+            .filter((id) => id.toString() !== productId.toString());
+        await itemRepository.update(componentId, {usedInProducts});
+      }
+    }
     console.log(`Removed product ${productId}
-        from ${removedComponentIds.length} materials`);
+      from ${removedComponentIds.length} materials`);
   }
 };
 
@@ -55,9 +67,10 @@ const updateItemRelationships = async (oldIds, newIds, productId) => {
  */
 const rebuildAllRelationships = async () => {
   console.log("Rebuilding all product-material relationships");
+  const itemRepository = getProviderFactory().getItemRepository();
 
   // Find all products (items that are products or both)
-  const products = await Item.find({
+  const products = await itemRepository.findAll({
     itemType: {$in: ["product", "both"]},
     components: {$exists: true, $ne: []},
   });
@@ -74,19 +87,22 @@ const rebuildAllRelationships = async () => {
     const componentIds = extractComponentIds(product.components);
 
     console.log(`Processing product ${product.name}
-        with ${componentIds.length} components`);
+      with ${componentIds.length} components`);
 
     if (componentIds.length > 0) {
-      // Update all referenced materials to include
-      // this product in their usedInProducts array
-      const result = await Item.updateMany(
-          {_id: {$in: componentIds}},
-          {$addToSet: {usedInProducts: product._id}},
-      );
-
-      updatedMaterialsCount += result.modifiedCount;
-      console.log(`Updated ${result.modifiedCount}
-        materials for product ${product.name}`);
+      // Update each material
+      for (const componentId of componentIds) {
+        const material = await itemRepository.findById(componentId);
+        if (material) {
+          const usedInProducts = material.usedInProducts || [];
+          if (!usedInProducts.includes(product._id)) {
+            usedInProducts.push(product._id);
+            await itemRepository.update(componentId, {usedInProducts});
+            updatedMaterialsCount++;
+          }
+        }
+      }
+      console.log(`Updated materials for product ${product.name}`);
     }
   }
 

@@ -1,37 +1,43 @@
-const MongoDBProvider = require("./database/mongodb");
-const FirebaseStorageProvider = require("./storage/firebase");
+const ProviderRegistry = require("./registry");
+const ProviderFactory = require("./providerFactory");
+const registerProvidersModule = require("./registerProviders");
+
+// Make sure we correctly extract the function
+const registerAllProviders = registerProvidersModule.registerAllProviders;
+
+// Create a separate factory object to avoid circular dependencies
+const providerFactory = {};
+// Declare the instance variable
+let providerFactoryInstance = null;
 
 /**
- * Factory to create database providers
+ * Get the provider factory instance
+ * @return {ProviderFactory} Provider factory instance
+ * @throws {Error} If providers haven't been initialized
  */
-const createDatabaseProvider = (type, config) => {
-  switch (type.toLowerCase()) {
-    case "mongodb":
-      return new MongoDBProvider(config);
-    // Add other database providers here
-    // case 'dynamodb':
-    //   return new DynamoDBProvider(config);
-    default:
-      throw new Error(`Unsupported database provider: ${type}`);
+const getProviderFactoryInstance = () => {
+  if (!providerFactoryInstance) {
+    throw new Error("Providers have not been initialized. Call initializeProviders() first");
   }
+  return providerFactoryInstance;
 };
 
-/**
- * Factory to create storage providers
- */
-const createStorageProvider = (type, config) => {
-  switch (type.toLowerCase()) {
-    case "firebase":
-      return new FirebaseStorageProvider(config);
-    // Add other storage providers here
-    // case 's3':
-    //   return new S3StorageProvider(config);
-    default:
-      throw new Error(`Unsupported storage provider: ${type}`);
-  }
-};
-
+// Export the factory before registering providers
 module.exports = {
-  createDatabaseProvider,
-  createStorageProvider,
+  getProviderFactory: getProviderFactoryInstance,
+  initializeProviders: async () => {
+    try {
+      // Register all available providers
+      registerAllProviders();
+
+      // Create and initialize provider factory
+      providerFactoryInstance = new ProviderFactory();
+      await providerFactoryInstance.initializeProviders();
+
+      return providerFactoryInstance;
+    } catch (error) {
+      console.error("Failed to initialize providers:", error);
+      throw error;
+    }
+  },
 };
