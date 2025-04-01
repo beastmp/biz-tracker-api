@@ -63,7 +63,7 @@ router.delete("/:id", deletePurchase);
 router.get("/reports/by-date", async (req, res, next) => {
   try {
     const {startDate, endDate} = req.query;
-    const filter = {businessId: req.user.businessId};
+    const filter = {};
 
     const report =
       await purchaseRepository.getReport(filter, startDate, endDate);
@@ -77,7 +77,7 @@ router.get("/reports/by-date", async (req, res, next) => {
 router.get("/trends", async (req, res, next) => {
   try {
     const {startDate, endDate} = req.query;
-    const filter = {businessId: req.user.businessId};
+    const filter = {};
 
     if (!startDate || !endDate) {
       return res.status(400).json({message:
