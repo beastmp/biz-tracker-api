@@ -43,6 +43,13 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
     const purchase = new Purchase(purchaseData);
 
     await purchase.save(options);
+
+    // Update inventory quantities for the purchased items
+    // Only update if status indicates items were received
+    if (purchase.status === "received" || purchase.status === "partially_received") {
+      await this.updateInventoryForPurchase(purchase.items, transaction);
+    }
+
     return purchase;
   }
 
