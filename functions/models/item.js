@@ -147,6 +147,30 @@ const ItemSchema = new mongoose.Schema({
       enum: ["oz", "lb", "g", "kg"],
     },
   }],
+  derivedFrom: {
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+    },
+    quantity: Number,
+    weight: Number,
+    weightUnit: {
+      type: String,
+      enum: ["oz", "lb", "g", "kg"],
+    },
+  },
+  derivedItems: [{
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+    },
+    quantity: Number,
+    weight: Number,
+    weightUnit: {
+      type: String,
+      enum: ["oz", "lb", "g", "kg"],
+    },
+  }],
 });
 
 module.exports = mongoose.model("Item", ItemSchema);

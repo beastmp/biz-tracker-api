@@ -9,6 +9,8 @@ const {upload, uploadErrorHandler, uploadToStorage} =
 const handlerFactory = require("../utils/handlerFactory");
 const {processFileUpload} = require("../middleware");
 const {getProviderFactory} = require("../providers");
+const {withTransaction} = require("../utils/transactionUtils");
+const {getItemRepository} = require("../utils/repositoryUtils");
 
 // Create handlers using factory
 const getAllItems = handlerFactory.getAll("Item");
@@ -117,6 +119,62 @@ router.get("/:id/relationships", async (req, res, next) => {
     const relationships =
       await itemRepository.getItemRelationships(req.params.id);
     res.json(relationships);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// NEW ENDPOINTS FOR INVENTORY BREAKDOWN
+
+// Break down an item into derived items
+router.post("/:id/breakdown", async (req, res, next) => {
+  try {
+    const sourceItemId = req.params.id;
+    const {derivedItems} = req.body;
+
+    if (!sourceItemId) {
+      return res.status(400).json({message: "Source item ID is required"});
+    }
+
+    if (!derivedItems || !Array.isArray(derivedItems) || derivedItems.length === 0) {
+      return res.status(400).json({message: "Derived items are required"});
+    }
+
+    // Use transaction to ensure all operations succeed or fail together
+    const result = await withTransaction(async (transaction) => {
+      const itemRepo = getItemRepository();
+      return await itemRepo.createDerivedItems(sourceItemId, derivedItems, transaction);
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("Error breaking down item:", err);
+    next(err);
+  }
+});
+
+// Get all derived items for a source item
+router.get("/:id/derived", async (req, res, next) => {
+  try {
+    const sourceItemId = req.params.id;
+    const derivedItems = await itemRepository.getDerivedItems(sourceItemId);
+    res.json(derivedItems);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get the parent item for a derived item
+router.get("/:id/parent", async (req, res, next) => {
+  try {
+    const derivedItemId = req.params.id;
+    const parentItem = await itemRepository.getParentItem(derivedItemId);
+
+    if (!parentItem) {
+      return res.status(404).json({message: "Parent item not found"});
+    }
+
+    res.json(parentItem);
   } catch (err) {
     next(err);
   }

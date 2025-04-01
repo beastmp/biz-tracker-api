@@ -120,6 +120,35 @@ class ItemRepository {
   async updateRelationships(itemId, relatedItems, relationType) {
     throw new Error("Method not implemented");
   }
+
+  /**
+   * Create derived items from a source/generic item
+   * @param {string} sourceItemId ID of the source item
+   * @param {Array} derivedItems Array of derived item data
+   * @param {Object} [transaction] Optional transaction
+   * @return {Promise<Object>} Object containing source item and derived items
+   */
+  async createDerivedItems(sourceItemId, derivedItems, transaction) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Get derived items for a source item
+   * @param {string} sourceItemId ID of the source item
+   * @return {Promise<Array>} Array of derived items
+   */
+  async getDerivedItems(sourceItemId) {
+    throw new Error("Method not implemented");
+  }
+
+  /**
+   * Get the parent item for a derived item
+   * @param {string} derivedItemId ID of the derived item
+   * @return {Promise<Object|null>} Parent item or null
+   */
+  async getParentItem(derivedItemId) {
+    throw new Error("Method not implemented");
+  }
 }
 
 module.exports = ItemRepository;

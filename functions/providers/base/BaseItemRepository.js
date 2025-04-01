@@ -153,6 +153,35 @@ class BaseItemRepository extends ItemRepository {
 
     throw new Error(`Relationship type ${relationType} not supported`);
   }
+
+  /**
+   * Create derived items from a source/generic item
+   * @param {string} sourceItemId ID of the source item
+   * @param {Array} derivedItems Array of derived item data
+   * @param {Object} [transaction] Optional transaction
+   * @return {Promise<Object>} Object containing source item and derived items
+   */
+  async createDerivedItems(sourceItemId, derivedItems, transaction = null) {
+    throw new Error("Method not implemented: createDerivedItems");
+  }
+
+  /**
+   * Get derived items for a source item
+   * @param {string} sourceItemId ID of the source item
+   * @return {Promise<Array>} Array of derived items
+   */
+  async getDerivedItems(sourceItemId) {
+    throw new Error("Method not implemented: getDerivedItems");
+  }
+
+  /**
+   * Get the parent item for a derived item
+   * @param {string} derivedItemId ID of the derived item
+   * @return {Promise<Object|null>} Parent item or null
+   */
+  async getParentItem(derivedItemId) {
+    throw new Error("Method not implemented: getParentItem");
+  }
 }
 
 module.exports = BaseItemRepository;

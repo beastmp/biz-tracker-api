@@ -206,6 +206,118 @@ class MongoItemRepository extends BaseItemRepository {
 
     throw new Error(`Relationship type ${relationType} not supported`);
   }
+
+  /**
+   * Create derived items from a source/generic item
+   * @param {string} sourceItemId ID of the source item
+   * @param {Array} derivedItems Array of derived item data
+   * @param {Object} [transaction] Optional transaction
+   * @return {Promise<Object>} Object containing source item and derived items
+   */
+  async createDerivedItems(sourceItemId, derivedItems, transaction = null) {
+    const options = transaction ? {session: transaction} : {};
+
+    // Get the source item
+    const sourceItem = await Item.findById(sourceItemId);
+    if (!sourceItem) {
+      throw new Error(`Source item with ID ${sourceItemId} not found`);
+    }
+
+    // Validate there's enough inventory to allocate
+    const totalQuantity = derivedItems.reduce(
+        (sum, item) => sum + (item.quantity || 0), 0);
+    const totalWeight = derivedItems.reduce(
+        (sum, item) => sum + (item.weight || 0), 0);
+
+    if (sourceItem.trackingType === "quantity" && totalQuantity > sourceItem.quantity) {
+      throw new Error(`Not enough quantity in source item.
+        Available: ${sourceItem.quantity}, Requested: ${totalQuantity}`);
+    }
+
+    if (sourceItem.trackingType === "weight" && totalWeight > sourceItem.weight) {
+      throw new Error(`Not enough weight in source item.
+        Available: ${sourceItem.weight}, Requested: ${totalWeight}`);
+    }
+
+    // Create the derived items
+    const createdItems = [];
+    for (const itemData of derivedItems) {
+      // Create new item with reference to source item
+      const derivedItem = new Item({
+        ...itemData,
+        derivedFrom: {
+          item: sourceItemId,
+          quantity: itemData.quantity,
+          weight: itemData.weight,
+          weightUnit: sourceItem.weightUnit,
+        },
+        // Copy properties from source item if not specified
+        trackingType: sourceItem.trackingType,
+        itemType: sourceItem.itemType,
+        weightUnit: sourceItem.weightUnit,
+        lengthUnit: sourceItem.lengthUnit,
+        areaUnit: sourceItem.areaUnit,
+        volumeUnit: sourceItem.volumeUnit,
+        priceType: sourceItem.priceType,
+        // If these were not provided in itemData, they'd be copied from source
+      });
+
+      await derivedItem.save(options);
+      createdItems.push(derivedItem);
+    }
+
+    // Update the source item with derived items reference and reduce inventory
+    const derivedItemsRefs = createdItems.map((item) => ({
+      item: item._id,
+      quantity: item.derivedFrom.quantity,
+      weight: item.derivedFrom.weight,
+      weightUnit: item.derivedFrom.weightUnit,
+    }));
+
+    // Update source item's inventory and add derived item references
+    if (sourceItem.trackingType === "quantity") {
+      sourceItem.quantity -= totalQuantity;
+    } else if (sourceItem.trackingType === "weight") {
+      sourceItem.weight -= totalWeight;
+    }
+
+    sourceItem.derivedItems = (sourceItem.derivedItems || []).concat(derivedItemsRefs);
+    sourceItem.lastUpdated = new Date();
+
+    await sourceItem.save(options);
+
+    return {
+      sourceItem,
+      derivedItems: createdItems,
+    };
+  }
+
+  /**
+   * Get derived items for a source item
+   * @param {string} sourceItemId ID of the source item
+   * @return {Promise<Array>} Array of derived items
+   */
+  async getDerivedItems(sourceItemId) {
+    const derivedItems = await Item.find({
+      "derivedFrom.item": sourceItemId,
+    }).sort({name: 1});
+
+    return derivedItems;
+  }
+
+  /**
+   * Get the parent item for a derived item
+   * @param {string} derivedItemId ID of the derived item
+   * @return {Promise<Object|null>} Parent item or null
+   */
+  async getParentItem(derivedItemId) {
+    const derivedItem = await Item.findById(derivedItemId);
+    if (!derivedItem || !derivedItem.derivedFrom || !derivedItem.derivedFrom.item) {
+      return null;
+    }
+
+    return await Item.findById(derivedItem.derivedFrom.item);
+  }
 }
 
 module.exports = MongoItemRepository;
