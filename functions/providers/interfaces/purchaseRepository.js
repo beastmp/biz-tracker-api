@@ -106,6 +106,15 @@ class PurchaseRepository {
   async getTrends(filter, startDate, endDate) {
     throw new Error("Method not implemented");
   }
+
+  /**
+   * Get all purchases containing a specific item
+   * @param {string} itemId - ID of the item to filter by
+   * @return {Promise<Array>} List of purchases containing the item
+   */
+  async getAllByItemId(itemId) {
+    throw new Error("Method not implemented");
+  }
 }
 
 module.exports = PurchaseRepository;

@@ -92,4 +92,16 @@ router.get("/trends", async (req, res, next) => {
   }
 });
 
+// Get purchases for a specific item
+router.get("/item/:itemId", async (req, res, next) => {
+  try {
+    const {itemId} = req.params;
+    const purchaseRepository = getProviderFactory().getPurchaseRepository();
+    const purchases = await purchaseRepository.getAllByItemId(itemId);
+    res.json(purchases);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

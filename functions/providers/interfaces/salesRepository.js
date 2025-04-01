@@ -105,6 +105,15 @@ class SalesRepository {
   async getTrends(filter, startDate, endDate) {
     throw new Error("Method not implemented");
   }
+
+  /**
+   * Get all sales containing a specific item
+   * @param {string} itemId - ID of the item to filter by
+   * @return {Promise<Array>} List of sales containing the item
+   */
+  async getAllByItemId(itemId) {
+    throw new Error("Method not implemented");
+  }
 }
 
 module.exports = SalesRepository;

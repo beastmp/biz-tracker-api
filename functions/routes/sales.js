@@ -120,4 +120,16 @@ router.get("/trends", async (req, res, next) => {
   }
 });
 
+// Get sales for a specific item
+router.get("/item/:itemId", async (req, res, next) => {
+  try {
+    const {itemId} = req.params;
+    const salesRepository = getSalesRepository();
+    const sales = await salesRepository.getAllByItemId(itemId);
+    res.json(sales);
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

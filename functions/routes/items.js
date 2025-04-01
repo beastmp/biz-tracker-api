@@ -11,6 +11,9 @@ const {processFileUpload} = require("../middleware");
 const {getProviderFactory} = require("../providers");
 const {withTransaction} = require("../utils/transactionUtils");
 const {getItemRepository} = require("../utils/repositoryUtils");
+const {rebuildRelationships} = require("../utils/itemRelationships");
+const {rebuildInventory, rebuildItemInventory} =
+  require("../utils/inventoryUtils");
 
 // Create handlers using factory
 const getAllItems = handlerFactory.getAll("Item");
@@ -177,6 +180,58 @@ router.get("/:id/parent", async (req, res, next) => {
     res.json(parentItem);
   } catch (err) {
     next(err);
+  }
+});
+
+// Rebuild item relationships (materials and products)
+router.post("/utility/rebuild-relationships", async (req, res, next) => {
+  try {
+    const {itemRepository} = req.providers;
+    const results = await rebuildRelationships(itemRepository);
+    res.json(results);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// NEW ENDPOINT: Rebuild inventory quantities, costs and prices
+router.post("/utility/rebuild-inventory", async (req, res, next) => {
+  try {
+    // Set a longer timeout for the response
+    req.setTimeout(120000); // 2 minutes
+    res.setTimeout(120000); // 2 minutes
+
+    // Fix: Get providers directly from the factory instead of req.providers
+    const providerFactory = getProviderFactory();
+    const providers = {
+      itemRepository: providerFactory.getItemRepository(),
+      purchaseRepository: providerFactory.getPurchaseRepository(),
+      salesRepository: providerFactory.getSalesRepository(),
+    };
+
+    // Process items in smaller batches to avoid timeouts
+    const results = await rebuildInventory(providers);
+    res.json(results);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// NEW ENDPOINT: Rebuild inventory for a specific item
+router.post("/utility/rebuild-inventory/:id", async (req, res, next) => {
+  try {
+    // Fix: Get providers directly from the factory instead of req.providers
+    const providerFactory = getProviderFactory();
+    const providers = {
+      itemRepository: providerFactory.getItemRepository(),
+      purchaseRepository: providerFactory.getPurchaseRepository(),
+      salesRepository: providerFactory.getSalesRepository(),
+    };
+
+    const result = await rebuildItemInventory(req.params.id, providers);
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
 });
 

@@ -255,6 +255,37 @@ class MongoSalesRepository extends BaseSalesRepository {
       },
     };
   }
+
+  /**
+   * Get all sales containing a specific item
+   * @param {string} itemId - ID of the item to filter by
+   * @return {Promise<Array>} List of sales containing the item
+   */
+  async getAllByItemId(itemId) {
+    try {
+      const mongoose = require("mongoose");
+      let objectId;
+
+      // Try to convert the itemId to an ObjectId if it's a valid format
+      try {
+        objectId = new mongoose.Types.ObjectId(itemId);
+      } catch (error) {
+        objectId = null;
+      }
+
+      // Create a query that handles both string IDs and ObjectIds
+      const query = {
+        "items.item": objectId ?
+          {$in: [itemId, objectId]} :
+          itemId,
+      };
+
+      return await Sale.find(query).sort({createdAt: -1});
+    } catch (error) {
+      console.error("Error getting sales by item ID:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = MongoSalesRepository;
