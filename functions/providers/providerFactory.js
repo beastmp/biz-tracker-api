@@ -20,6 +20,7 @@ class ProviderFactory {
         item: null,
         sales: null,
         purchase: null,
+        asset: null,
       },
       transactionProvider: null,
     };
@@ -122,6 +123,8 @@ class ProviderFactory {
         this.instances.database.createSalesRepository();
       this.instances.repositories.purchase =
         this.instances.database.createPurchaseRepository();
+      this.instances.repositories.asset =
+        this.instances.database.createAssetRepository();
 
       // Set up cross-repository references
       this.linkRepositories();
@@ -245,6 +248,17 @@ class ProviderFactory {
       throw new Error("Purchase repository has not been initialized");
     }
     return this.instances.repositories.purchase;
+  }
+
+  /**
+   * Get the asset repository
+   * @return {Object} Asset repository instance
+   */
+  getAssetRepository() {
+    if (!this.instances.repositories.asset) {
+      throw new Error("Asset repository has not been initialized");
+    }
+    return this.instances.repositories.asset;
   }
 
   /**

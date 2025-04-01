@@ -4,6 +4,7 @@ const MongoItemRepository = require("./itemRepository");
 const MongoSalesRepository = require("./salesRepository");
 const MongoPurchaseRepository = require("./purchaseRepository");
 const MongoTransactionProvider = require("./transactionProvider");
+const MongoAssetRepository = require("./assetRepository");
 const ProviderRegistry = require("../../registry");
 
 /**
@@ -17,7 +18,7 @@ class MongoDBProvider extends BaseDatabaseProvider {
     super({}); // Pass empty config object for now
     this.name = "mongodb";
     this.type = "database";
-    this.supportedRepositories = ["item", "sales", "purchase"];
+    this.supportedRepositories = ["item", "sales", "purchase", "asset"];
   }
 
   /**
@@ -92,6 +93,14 @@ class MongoDBProvider extends BaseDatabaseProvider {
    */
   createTransactionProvider() {
     return new MongoTransactionProvider();
+  }
+
+  /**
+   * Create an asset repository
+   * @return {MongoAssetRepository} MongoDB asset repository implementation
+   */
+  createAssetRepository() {
+    return new MongoAssetRepository();
   }
 
   /**

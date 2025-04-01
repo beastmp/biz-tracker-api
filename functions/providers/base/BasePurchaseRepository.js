@@ -73,7 +73,7 @@ class BasePurchaseRepository extends PurchaseRepository {
   }
 
   /**
-   * Base implementation of report generation
+   * Get purchase report
    * @param {Object} filter Query filters
    * @param {string} [startDate] Start date for report
    * @param {string} [endDate] End date for report
@@ -81,33 +81,28 @@ class BasePurchaseRepository extends PurchaseRepository {
    */
   async getReport(filter, startDate, endDate) {
     try {
-      // Create date filters if provided
-      let dateFilter = {};
-      if (startDate && endDate) {
-        dateFilter = {
-          purchaseDate: {
-            $gte: new Date(startDate),
-            $lte: new Date(endDate),
-          },
-        };
+      // Get purchases within date range
+      const query = {...filter};
+      if (startDate || endDate) {
+        query.purchaseDate = {};
+        if (startDate) {
+          query.purchaseDate.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          query.purchaseDate.$lte = new Date(endDate);
+        }
       }
 
-      // Combine filters
-      const combinedFilter = {...filter, ...dateFilter};
+      const purchases = await this.findAll(query);
 
-      // Get purchases within the date range
-      const purchases = await this.findAll(combinedFilter);
-
-      // Calculate metrics
+      // Calculate report statistics
       const totalPurchases = purchases.length;
-      const totalSpent = purchases.reduce((sum, purchase) =>
-        sum + purchase.total, 0);
-      const averagePurchaseValue = totalPurchases > 0 ?
-        totalSpent / totalPurchases : 0;
+      const totalCost = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+      const averagePurchaseValue = totalPurchases > 0 ? totalCost / totalPurchases : 0;
 
       return {
         totalPurchases,
-        totalSpent,
+        totalCost,
         averagePurchaseValue,
         purchases,
       };
@@ -115,6 +110,105 @@ class BasePurchaseRepository extends PurchaseRepository {
       console.error("Error generating purchase report:", error);
       throw error;
     }
+  }
+
+  /**
+   * Get purchase trends
+   * @param {Object} filter Query filters
+   * @param {string} startDate Start date for trends
+   * @param {string} endDate End date for trends
+   * @return {Promise<Object>} Trends data
+   */
+  async getTrends(filter, startDate, endDate) {
+    try {
+      // Get purchases within date range
+      const query = {...filter};
+      if (startDate || endDate) {
+        query.purchaseDate = {};
+        if (startDate) {
+          query.purchaseDate.$gte = new Date(startDate);
+        }
+        if (endDate) {
+          query.purchaseDate.$lte = new Date(endDate);
+        }
+      }
+
+      const purchases = await this.findAll(query);
+
+      // Group purchases by date
+      const trendData = {};
+      purchases.forEach((purchase) => {
+        // Format the date as YYYY-MM-DD
+        const date = purchase.purchaseDate ?
+          new Date(purchase.purchaseDate).toISOString().split("T")[0] :
+          new Date().toISOString().split("T")[0];
+
+        if (!trendData[date]) {
+          trendData[date] = {
+            date,
+            count: 0,
+            total: 0,
+            measurementBreakdown: {
+              quantity: {count: 0, total: 0},
+              weight: {count: 0, total: 0},
+              length: {count: 0, total: 0},
+              area: {count: 0, total: 0},
+              volume: {count: 0, total: 0},
+            },
+          };
+        }
+
+        trendData[date].count += 1;
+        trendData[date].total += purchase.total;
+
+        // Analyze items by measurement type
+        purchase.items.forEach((item) => {
+          const measurementType = item.purchasedBy || "quantity";
+          trendData[date].measurementBreakdown[measurementType].count += 1;
+          trendData[date].measurementBreakdown[measurementType].total += item.totalCost;
+        });
+      });
+
+      // Convert to array and sort by date
+      return Object.values(trendData).sort((a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime(),
+      );
+    } catch (error) {
+      console.error("Error generating purchase trends:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all purchases containing a specific item
+   * @param {string} itemId - ID of the item to filter by
+   * @return {Promise<Array>} List of purchases containing the item
+   */
+  async getAllByItemId(itemId) {
+    try {
+      // This is a basic implementation that filters in memory
+      const allPurchases = await this.findAll({});
+      return allPurchases.filter((purchase) =>
+        purchase.items.some((item) =>
+          (typeof item.item === "string" && item.item === itemId) ||
+          (item.item && item.item._id === itemId),
+        ),
+      );
+    } catch (error) {
+      console.error(`Error getting purchases by item ID ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a business asset from a purchase item
+   * @param {string} purchaseId - ID of the purchase
+   * @param {number} itemIndex - Index of the item in the purchase
+   * @param {Object} assetData - Additional asset data
+   * @return {Promise<Object>} Created business asset
+   */
+  async createAssetFromPurchaseItem(purchaseId, itemIndex, assetData) {
+    throw new Error("Method not implemented: createAssetFromPurchaseItem");
   }
 }
 

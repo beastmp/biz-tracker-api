@@ -3,6 +3,7 @@ const MongoItemRepository = require("./itemRepository");
 const MongoSalesRepository = require("./salesRepository");
 const MongoPurchaseRepository = require("./purchaseRepository");
 const MongoTransactionProvider = require("./transactionProvider");
+const MongoAssetRepository = require("./assetRepository");
 
 module.exports = {
   MongoDBProvider,
@@ -10,4 +11,5 @@ module.exports = {
   MongoSalesRepository,
   MongoPurchaseRepository,
   MongoTransactionProvider,
+  MongoAssetRepository,
 };

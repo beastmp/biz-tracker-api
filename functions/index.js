@@ -50,12 +50,14 @@ const setupApp = async () => {
     const purchasesRoutes = require("./routes/purchases");
     const itemsRoutes = require("./routes/items");
     const healthRoutes = require("./routes/health");
+    const assetsRoutes = require("./routes/assets"); // Add assets routes
 
     // Routes
     app.use("/api/sales", salesRoutes);
     app.use("/api/purchases", purchasesRoutes);
     app.use("/api/items", itemsRoutes);
     app.use("/api/health", healthRoutes);
+    app.use("/api/assets", assetsRoutes); // Register assets routes
 
     // Error handler
     app.use(errorHandler);

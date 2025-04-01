@@ -4,6 +4,7 @@ const PurchaseRepository = require("./purchaseRepository");
 const StorageProvider = require("./storageProvider");
 const TransactionProvider = require("./transactionProvider");
 const DatabaseProvider = require("./databaseProvider");
+const AssetRepository = require("./assetRepository");
 
 module.exports = {
   ItemRepository,
@@ -12,4 +13,5 @@ module.exports = {
   StorageProvider,
   TransactionProvider,
   DatabaseProvider,
+  AssetRepository,
 };

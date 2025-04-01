@@ -68,6 +68,16 @@ class DatabaseProvider {
   }
 
   /**
+   * Create an asset repository
+   * @abstract
+   * @throws {Error} When method is not implemented
+   * @return {Object} Asset repository implementation
+   */
+  createAssetRepository() {
+    throw new Error("Method not implemented");
+  }
+
+  /**
    * Check if this provider supports a specific repository type
    * @param {string} repositoryType - Type of repository to check
    * @abstract

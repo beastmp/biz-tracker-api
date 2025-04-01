@@ -44,10 +44,19 @@ const getDatabaseProvider = () => {
   return getProviderFactory().getDatabaseProvider();
 };
 
+/**
+ * Get the asset repository
+ * @return {AssetRepository} Asset repository instance
+ */
+const getAssetRepository = () => {
+  return getProviderFactory().getAssetRepository();
+};
+
 module.exports = {
   getItemRepository,
   getSalesRepository,
   getPurchaseRepository,
   getStorageProvider,
   getDatabaseProvider,
+  getAssetRepository,
 };
