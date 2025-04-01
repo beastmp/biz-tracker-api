@@ -14,6 +14,7 @@ const {getItemRepository} = require("../utils/repositoryUtils");
 const {rebuildRelationships} = require("../utils/itemRelationships");
 const {rebuildInventory, rebuildItemInventory} =
   require("../utils/inventoryUtils");
+const Item = require("../models/item"); // Add this import statement
 
 // Create handlers using factory
 const getAllItems = handlerFactory.getAll("Item");
@@ -68,7 +69,32 @@ router.post("/",
 );
 
 // Get one item
-router.get("/:id", getItem);
+router.get("/:id", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const {populate = "false"} = req.query;
+
+    // Use the standard handler for non-populated requests
+    if (populate !== "true") {
+      return getItem(req, res, next);
+    }
+
+    // For populated requests, use a custom approach to ensure all relationships are populated
+    const item = await Item.findById(id)
+        .populate("derivedFrom.item")
+        .populate("derivedItems.item")
+        .populate("components.item")
+        .populate("usedInProducts");
+
+    if (!item) {
+      return res.status(404).json({message: "Item not found"});
+    }
+
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Update item
 router.patch("/:id",

@@ -60,14 +60,38 @@ const handlerFactory = {
    */
   getOne: (modelName, entityName) => async (req, res, next) => {
     try {
-      const repository = getRepositoryForModel(modelName);
-      const document = await repository.findById(req.params.id);
+      const {params, query} = req;
+      const {id} = params;
+      const {populate = "false"} = query;
 
-      if (!document) {
-        return next(new NotFoundError(entityName, req.params.id));
+      // Get the appropriate repository
+      const repository = getRepositoryForModel(modelName);
+
+      let doc;
+      if (populate === "true") {
+        // For items, use a custom populate approach
+        if (modelName === "Item") {
+          const Item = require("../models/item");
+          doc = await Item.findById(id)
+              .populate("derivedFrom.item")
+              .populate("derivedItems.item")
+              .populate("components.item")
+              .populate("usedInProducts");
+        } else {
+          // For other models, use the repository's findById method
+          doc = await repository.findById(id);
+        }
+      } else {
+        doc = await repository.findById(id);
       }
 
-      res.json(document);
+      if (!doc) {
+        return res.status(404).json({
+          message: `${entityName || modelName} not found`,
+        });
+      }
+
+      res.json(doc);
     } catch (err) {
       next(err);
     }

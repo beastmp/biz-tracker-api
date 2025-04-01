@@ -1,5 +1,6 @@
 const {BaseItemRepository} = require("../../base");
 const Item = require("../../../models/item");
+const mongoose = require("mongoose"); // Add this import statement
 const {extractComponentIds, updateItemRelationships} =
   require("../../../utils/itemRelationships");
 
@@ -22,7 +23,22 @@ class MongoItemRepository extends BaseItemRepository {
    * @return {Promise<Object|null>} Item object or null if not found
    */
   async findById(id) {
-    return await Item.findById(id);
+    // Check if we have a valid ID
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return null;
+    }
+
+    try {
+      // Populate the derivation relationships when fetching an item
+      return await Item.findById(id)
+          .populate("derivedFrom.item")
+          .populate("derivedItems.item")
+          .populate("components.item")
+          .populate("usedInProducts");
+    } catch (error) {
+      console.error(`Error finding item by ID ${id}:`, error);
+      return null;
+    }
   }
 
   /**
