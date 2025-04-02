@@ -239,6 +239,12 @@ class MongoItemRepository extends BaseItemRepository {
       throw new Error(`Source item with ID ${sourceItemId} not found`);
     }
 
+    // Debug: Log source item ID
+    console.log(`Creating derived items from source item: ${sourceItemId}`, {
+      sourceItemName: sourceItem.name,
+      sourceItemSku: sourceItem.sku
+    });
+
     // Validate there's enough inventory to allocate based on tracking type
     const totalAllocated = {
       quantity: 0,
@@ -260,20 +266,15 @@ class MongoItemRepository extends BaseItemRepository {
     // Check if we have enough inventory based on tracking type
     const trackingType = sourceItem.trackingType;
     if (trackingType === "quantity" && totalAllocated.quantity > sourceItem.quantity) {
-      throw new Error(`Not enough quantity in source item.
-        Available: ${sourceItem.quantity}, Requested: ${totalAllocated.quantity}`);
+      throw new Error(`Not enough quantity in source item. Available: ${sourceItem.quantity}, Requested: ${totalAllocated.quantity}`);
     } else if (trackingType === "weight" && totalAllocated.weight > sourceItem.weight) {
-      throw new Error(`Not enough weight in source item.
-        Available: ${sourceItem.weight}, Requested: ${totalAllocated.weight}`);
+      throw new Error(`Not enough weight in source item. Available: ${sourceItem.weight}, Requested: ${totalAllocated.weight}`);
     } else if (trackingType === "length" && totalAllocated.length > sourceItem.length) {
-      throw new Error(`Not enough length in source item.
-        Available: ${sourceItem.length}, Requested: ${totalAllocated.length}`);
+      throw new Error(`Not enough length in source item. Available: ${sourceItem.length}, Requested: ${totalAllocated.length}`);
     } else if (trackingType === "area" && totalAllocated.area > sourceItem.area) {
-      throw new Error(`Not enough area in source item.
-        Available: ${sourceItem.area}, Requested: ${totalAllocated.area}`);
+      throw new Error(`Not enough area in source item. Available: ${sourceItem.area}, Requested: ${totalAllocated.area}`);
     } else if (trackingType === "volume" && totalAllocated.volume > sourceItem.volume) {
-      throw new Error(`Not enough volume in source item.
-        Available: ${sourceItem.volume}, Requested: ${totalAllocated.volume}`);
+      throw new Error(`Not enough volume in source item. Available: ${sourceItem.volume}, Requested: ${totalAllocated.volume}`);
     }
 
     // Process each derived item - either creating a new one or updating an existing one
@@ -289,9 +290,18 @@ class MongoItemRepository extends BaseItemRepository {
           throw new Error(`Existing item with ID ${itemData.itemId} not found for allocation`);
         }
 
-        // Create a derivation reference
+        console.log(`Allocating to existing item: ${existingItem._id}`, {
+          existingItemName: existingItem.name,
+          existingItemSku: existingItem.sku
+        });
+
+        // Create a derivation reference - ensure sourceItemId is set as ObjectId
+        const sourceItemObjectId = mongoose.Types.ObjectId.isValid(sourceItemId)
+            ? new mongoose.Types.ObjectId(sourceItemId)
+            : sourceItemId;
+
         const derivationRef = {
-          item: sourceItemId,
+          item: sourceItemObjectId, // Ensure proper ObjectId reference
           quantity: itemData.quantity || 0,
           weight: itemData.weight || 0,
           weightUnit: sourceItem.weightUnit,
@@ -306,6 +316,7 @@ class MongoItemRepository extends BaseItemRepository {
         // Add the source item to the derivedFrom array if not already there
         if (!existingItem.derivedFrom) {
           existingItem.derivedFrom = derivationRef;
+          console.log(`Setting derivedFrom for item ${existingItem._id} to source ${sourceItemId}`);
         } else {
           // Fix: Check if item exists before trying to access toString()
           const sourceItemIdStr = sourceItemId.toString();
@@ -317,23 +328,18 @@ class MongoItemRepository extends BaseItemRepository {
 
           // If already derived from other items, ensure it's not duplicated
           if (existingSourceItemId && existingSourceItemId !== sourceItemIdStr) {
-            throw new Error(`Item ${existingItem.name} is already derived from another item.
-              Cannot have multiple source items.`);
+            throw new Error(`Item is already derived from a different source item: ${existingSourceItemId}`);
           }
 
-          // Fix: Initialize missing fields to prevent "undefined + number" errors
-          if (!existingItem.derivedFrom.quantity) existingItem.derivedFrom.quantity = 0;
-          if (!existingItem.derivedFrom.weight) existingItem.derivedFrom.weight = 0;
-          if (!existingItem.derivedFrom.length) existingItem.derivedFrom.length = 0;
-          if (!existingItem.derivedFrom.area) existingItem.derivedFrom.area = 0;
-          if (!existingItem.derivedFrom.volume) existingItem.derivedFrom.volume = 0;
-
-          // Update the derivation amounts
-          existingItem.derivedFrom.quantity += itemData.quantity || 0;
-          existingItem.derivedFrom.weight += itemData.weight || 0;
-          existingItem.derivedFrom.length += itemData.length || 0;
-          existingItem.derivedFrom.area += itemData.area || 0;
-          existingItem.derivedFrom.volume += itemData.volume || 0;
+          // Fix: Completely replace the derivedFrom object instead of trying to update fields
+          existingItem.derivedFrom = {
+            ...derivationRef,
+            quantity: (existingItem.derivedFrom.quantity || 0) + (itemData.quantity || 0),
+            weight: (existingItem.derivedFrom.weight || 0) + (itemData.weight || 0),
+            length: (existingItem.derivedFrom.length || 0) + (itemData.length || 0),
+            area: (existingItem.derivedFrom.area || 0) + (itemData.area || 0),
+            volume: (existingItem.derivedFrom.volume || 0) + (itemData.volume || 0)
+          };
         }
 
         // Update the measurement values of the existing item based on allocation
@@ -360,6 +366,11 @@ class MongoItemRepository extends BaseItemRepository {
 
         // Save the updated item
         await existingItem.save(options);
+        console.log(`Saved allocation for existing item ${existingItem._id}`, {
+          derivedFromItem: existingItem.derivedFrom?.item,
+          hasDerivation: !!existingItem.derivedFrom
+        });
+
         resultItems.push(existingItem);
 
         // Add to the derived items references for the source item
@@ -377,6 +388,13 @@ class MongoItemRepository extends BaseItemRepository {
         });
       } else {
         // CREATE NEW DERIVED ITEM
+        console.log(`Creating new derived item: ${itemData.name} (${itemData.sku})`);
+
+        // Ensure sourceItemId is converted to ObjectId for proper reference
+        const sourceItemObjectId = mongoose.Types.ObjectId.isValid(sourceItemId)
+            ? new mongoose.Types.ObjectId(sourceItemId)
+            : sourceItemId;
+
         const derivedItem = new Item({
           name: itemData.name,
           sku: itemData.sku,
@@ -387,9 +405,9 @@ class MongoItemRepository extends BaseItemRepository {
           tags: itemData.tags || sourceItem.tags,
           imageUrl: itemData.imageUrl || sourceItem.imageUrl,
 
-          // Derived item reference
+          // Derived item reference - ensure proper ObjectId
           derivedFrom: {
-            item: sourceItemId,
+            item: sourceItemObjectId, // Use proper ObjectId for reference
             quantity: itemData.quantity || 0,
             weight: itemData.weight || 0,
             weightUnit: sourceItem.weightUnit,
@@ -434,8 +452,20 @@ class MongoItemRepository extends BaseItemRepository {
             break;
         }
 
+        // Log right before saving
+        console.log(`About to save new derived item with derivedFrom:`, {
+          derivedFromItem: derivedItem.derivedFrom.item,
+          derivedFromItemType: typeof derivedItem.derivedFrom.item,
+          sourceItemId
+        });
+
         // Save the new derived item
         await derivedItem.save(options);
+        console.log(`Saved new derived item ${derivedItem._id}`, {
+          hasDerivation: !!derivedItem.derivedFrom,
+          derivedFromItem: derivedItem.derivedFrom?.item
+        });
+
         resultItems.push(derivedItem);
 
         // Add to the derived items references for the source item
@@ -477,7 +507,11 @@ class MongoItemRepository extends BaseItemRepository {
     sourceItem.derivedItems = (sourceItem.derivedItems || []).concat(derivedItemsRefs);
     sourceItem.lastUpdated = new Date();
 
-    // Save the updated source item
+    // Log the source item's derived items before saving
+    console.log(`Source item ${sourceItem._id} has ${sourceItem.derivedItems.length} derived items:`,
+      sourceItem.derivedItems.map(d => ({ item: d.item })));
+
+    // Save the updated source item - THIS IS THE KEY LINE THAT WAS MISSING
     await sourceItem.save(options);
 
     return {
@@ -492,9 +526,21 @@ class MongoItemRepository extends BaseItemRepository {
    * @return {Promise<Array>} Array of derived items
    */
   async getDerivedItems(sourceItemId) {
+    // Convert string ID to ObjectId if needed
+    const objId = mongoose.Types.ObjectId.isValid(sourceItemId)
+      ? new mongoose.Types.ObjectId(sourceItemId)
+      : sourceItemId;
+
     const derivedItems = await Item.find({
-      "derivedFrom.item": sourceItemId,
-    }).sort({name: 1});
+      "derivedFrom.item": objId,
+    })
+    .populate("derivedFrom.item")
+    .populate("derivedItems.item")
+    .populate("components.item")
+    .populate("usedInProducts")
+    .sort({name: 1});
+
+    console.log(`Found ${derivedItems.length} derived items for source ${sourceItemId}`);
 
     return derivedItems;
   }

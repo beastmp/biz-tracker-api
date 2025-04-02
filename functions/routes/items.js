@@ -74,24 +74,33 @@ router.get("/:id", async (req, res, next) => {
     const {id} = req.params;
     const {populate = "false"} = req.query;
 
-    // Use the standard handler for non-populated requests
-    if (populate !== "true") {
-      return getItem(req, res, next);
-    }
-
     // For populated requests, use a custom approach to ensure all relationships are populated
-    const item = await Item.findById(id)
-        .populate("derivedFrom.item")
-        .populate("derivedItems.item")
-        .populate("components.item")
-        .populate("usedInProducts");
+    if (populate === "true") {
+      // Add debug logging
+      console.log(`Fetching item ${id} with populated relationships`);
 
-    if (!item) {
-      return res.status(404).json({message: "Item not found"});
+      const item = await Item.findById(id)
+          .populate("derivedFrom.item")
+          .populate("derivedItems.item")
+          .populate("components.item")
+          .populate("usedInProducts");
+
+      if (!item) {
+        console.log(`Item ${id} not found`);
+        return res.status(404).json({message: "Item not found"});
+      }
+
+      // Add debug logging for relationships
+      console.log(`Item ${id} found. Has derivedFrom:`, !!item.derivedFrom);
+      console.log(`Item ${id} has ${item.derivedItems ? item.derivedItems.length : 0} derived items`);
+
+      return res.json(item);
     }
 
-    res.json(item);
+    // Use the standard handler for non-populated requests
+    return getItem(req, res, next);
   } catch (err) {
+    console.error(`Error fetching item ${req.params.id}:`, err);
     next(err);
   }
 });
@@ -161,6 +170,9 @@ router.post("/:id/breakdown", async (req, res, next) => {
     const sourceItemId = req.params.id;
     const {derivedItems} = req.body;
 
+    // Debug: Log the request parameters
+    console.log(`Creating breakdown items for source ${sourceItemId} with ${derivedItems?.length || 0} items`);
+
     if (!sourceItemId) {
       return res.status(400).json({message: "Source item ID is required"});
     }
@@ -205,6 +217,18 @@ router.post("/:id/breakdown", async (req, res, next) => {
     const result = await withTransaction(async (transaction) => {
       const itemRepo = getItemRepository();
       return await itemRepo.createDerivedItems(sourceItemId, derivedItems, transaction);
+    });
+
+    // Debug: Log the result
+    console.log(`Successfully created ${result.derivedItems.length} derived items`);
+
+    // Check each derived item for proper derivedFrom
+    result.derivedItems.forEach((item, idx) => {
+      console.log(`Derived item ${idx + 1}: ${item._id}`, {
+        name: item.name,
+        hasDerivedFrom: !!item.derivedFrom,
+        derivedFromItem: item.derivedFrom?.item
+      });
     });
 
     res.json(result);
