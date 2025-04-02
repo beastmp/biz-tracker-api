@@ -169,6 +169,38 @@ router.post("/:id/breakdown", async (req, res, next) => {
       return res.status(400).json({message: "Derived items are required"});
     }
 
+    // Validate that each derived item has the necessary data based on whether it's new or existing
+    for (const item of derivedItems) {
+      if (item.itemId) {
+        // Existing item - must have valid measurement values
+        if (item.quantity === undefined &&
+            item.weight === undefined &&
+            item.length === undefined &&
+            item.area === undefined &&
+            item.volume === undefined) {
+          return res.status(400).json({
+            message: "Each allocation must include a valid measurement value (quantity, weight, length, area, or volume)",
+          });
+        }
+      } else {
+        // New item - must have name, sku and measurement values
+        if (!item.name || !item.sku) {
+          return res.status(400).json({
+            message: "Each new derived item must have a name and SKU",
+          });
+        }
+        if (item.quantity === undefined &&
+            item.weight === undefined &&
+            item.length === undefined &&
+            item.area === undefined &&
+            item.volume === undefined) {
+          return res.status(400).json({
+            message: "Each derived item must include a valid measurement value (quantity, weight, length, area, or volume)",
+          });
+        }
+      }
+    }
+
     // Use transaction to ensure all operations succeed or fail together
     const result = await withTransaction(async (transaction) => {
       const itemRepo = getItemRepository();

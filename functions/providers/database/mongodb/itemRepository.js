@@ -239,72 +239,250 @@ class MongoItemRepository extends BaseItemRepository {
       throw new Error(`Source item with ID ${sourceItemId} not found`);
     }
 
-    // Validate there's enough inventory to allocate
-    const totalQuantity = derivedItems.reduce(
-        (sum, item) => sum + (item.quantity || 0), 0);
-    const totalWeight = derivedItems.reduce(
-        (sum, item) => sum + (item.weight || 0), 0);
+    // Validate there's enough inventory to allocate based on tracking type
+    const totalAllocated = {
+      quantity: 0,
+      weight: 0,
+      length: 0,
+      area: 0,
+      volume: 0,
+    };
 
-    if (sourceItem.trackingType === "quantity" && totalQuantity > sourceItem.quantity) {
+    // Calculate total allocated for each measurement type
+    derivedItems.forEach((item) => {
+      totalAllocated.quantity += item.quantity || 0;
+      totalAllocated.weight += item.weight || 0;
+      totalAllocated.length += item.length || 0;
+      totalAllocated.area += item.area || 0;
+      totalAllocated.volume += item.volume || 0;
+    });
+
+    // Check if we have enough inventory based on tracking type
+    const trackingType = sourceItem.trackingType;
+    if (trackingType === "quantity" && totalAllocated.quantity > sourceItem.quantity) {
       throw new Error(`Not enough quantity in source item.
-        Available: ${sourceItem.quantity}, Requested: ${totalQuantity}`);
-    }
-
-    if (sourceItem.trackingType === "weight" && totalWeight > sourceItem.weight) {
+        Available: ${sourceItem.quantity}, Requested: ${totalAllocated.quantity}`);
+    } else if (trackingType === "weight" && totalAllocated.weight > sourceItem.weight) {
       throw new Error(`Not enough weight in source item.
-        Available: ${sourceItem.weight}, Requested: ${totalWeight}`);
+        Available: ${sourceItem.weight}, Requested: ${totalAllocated.weight}`);
+    } else if (trackingType === "length" && totalAllocated.length > sourceItem.length) {
+      throw new Error(`Not enough length in source item.
+        Available: ${sourceItem.length}, Requested: ${totalAllocated.length}`);
+    } else if (trackingType === "area" && totalAllocated.area > sourceItem.area) {
+      throw new Error(`Not enough area in source item.
+        Available: ${sourceItem.area}, Requested: ${totalAllocated.area}`);
+    } else if (trackingType === "volume" && totalAllocated.volume > sourceItem.volume) {
+      throw new Error(`Not enough volume in source item.
+        Available: ${sourceItem.volume}, Requested: ${totalAllocated.volume}`);
     }
 
-    // Create the derived items
-    const createdItems = [];
+    // Process each derived item - either creating a new one or updating an existing one
+    const resultItems = [];
+    const derivedItemsRefs = []; // References to derived items for the source item
+
     for (const itemData of derivedItems) {
-      // Create new item with reference to source item
-      const derivedItem = new Item({
-        ...itemData,
-        derivedFrom: {
+      // Check if this is an allocation to an existing item or creation of a new item
+      if (itemData.itemId) {
+        // ALLOCATION TO EXISTING ITEM
+        const existingItem = await Item.findById(itemData.itemId);
+        if (!existingItem) {
+          throw new Error(`Existing item with ID ${itemData.itemId} not found for allocation`);
+        }
+
+        // Create a derivation reference
+        const derivationRef = {
           item: sourceItemId,
-          quantity: itemData.quantity,
-          weight: itemData.weight,
+          quantity: itemData.quantity || 0,
+          weight: itemData.weight || 0,
           weightUnit: sourceItem.weightUnit,
-        },
-        // Copy properties from source item if not specified
-        trackingType: sourceItem.trackingType,
-        itemType: sourceItem.itemType,
-        weightUnit: sourceItem.weightUnit,
-        lengthUnit: sourceItem.lengthUnit,
-        areaUnit: sourceItem.areaUnit,
-        volumeUnit: sourceItem.volumeUnit,
-        priceType: sourceItem.priceType,
-        // If these were not provided in itemData, they'd be copied from source
-      });
+          length: itemData.length || 0,
+          lengthUnit: sourceItem.lengthUnit,
+          area: itemData.area || 0,
+          areaUnit: sourceItem.areaUnit,
+          volume: itemData.volume || 0,
+          volumeUnit: sourceItem.volumeUnit,
+        };
 
-      await derivedItem.save(options);
-      createdItems.push(derivedItem);
+        // Add the source item to the derivedFrom array if not already there
+        if (!existingItem.derivedFrom) {
+          existingItem.derivedFrom = derivationRef;
+        } else {
+          // Fix: Check if item exists before trying to access toString()
+          const sourceItemIdStr = sourceItemId.toString();
+          const existingSourceItemId = existingItem.derivedFrom.item
+              ? (typeof existingItem.derivedFrom.item === 'object'
+                 ? existingItem.derivedFrom.item._id?.toString()
+                 : existingItem.derivedFrom.item.toString())
+              : null;
+
+          // If already derived from other items, ensure it's not duplicated
+          if (existingSourceItemId && existingSourceItemId !== sourceItemIdStr) {
+            throw new Error(`Item ${existingItem.name} is already derived from another item.
+              Cannot have multiple source items.`);
+          }
+
+          // Fix: Initialize missing fields to prevent "undefined + number" errors
+          if (!existingItem.derivedFrom.quantity) existingItem.derivedFrom.quantity = 0;
+          if (!existingItem.derivedFrom.weight) existingItem.derivedFrom.weight = 0;
+          if (!existingItem.derivedFrom.length) existingItem.derivedFrom.length = 0;
+          if (!existingItem.derivedFrom.area) existingItem.derivedFrom.area = 0;
+          if (!existingItem.derivedFrom.volume) existingItem.derivedFrom.volume = 0;
+
+          // Update the derivation amounts
+          existingItem.derivedFrom.quantity += itemData.quantity || 0;
+          existingItem.derivedFrom.weight += itemData.weight || 0;
+          existingItem.derivedFrom.length += itemData.length || 0;
+          existingItem.derivedFrom.area += itemData.area || 0;
+          existingItem.derivedFrom.volume += itemData.volume || 0;
+        }
+
+        // Update the measurement values of the existing item based on allocation
+        switch (trackingType) {
+          case "quantity":
+            existingItem.quantity += itemData.quantity || 0;
+            break;
+          case "weight":
+            existingItem.weight += itemData.weight || 0;
+            break;
+          case "length":
+            existingItem.length += itemData.length || 0;
+            break;
+          case "area":
+            existingItem.area += itemData.area || 0;
+            break;
+          case "volume":
+            existingItem.volume += itemData.volume || 0;
+            break;
+        }
+
+        // Update the last updated timestamp
+        existingItem.lastUpdated = new Date();
+
+        // Save the updated item
+        await existingItem.save(options);
+        resultItems.push(existingItem);
+
+        // Add to the derived items references for the source item
+        derivedItemsRefs.push({
+          item: existingItem._id,
+          quantity: itemData.quantity || 0,
+          weight: itemData.weight || 0,
+          weightUnit: sourceItem.weightUnit,
+          length: itemData.length || 0,
+          lengthUnit: sourceItem.lengthUnit,
+          area: itemData.area || 0,
+          areaUnit: sourceItem.areaUnit,
+          volume: itemData.volume || 0,
+          volumeUnit: sourceItem.volumeUnit,
+        });
+      } else {
+        // CREATE NEW DERIVED ITEM
+        const derivedItem = new Item({
+          name: itemData.name,
+          sku: itemData.sku,
+          category: itemData.category || sourceItem.category,
+          description: itemData.description,
+          price: itemData.price !== undefined ? itemData.price : sourceItem.price,
+          cost: itemData.cost !== undefined ? itemData.cost : sourceItem.cost,
+          tags: itemData.tags || sourceItem.tags,
+          imageUrl: itemData.imageUrl || sourceItem.imageUrl,
+
+          // Derived item reference
+          derivedFrom: {
+            item: sourceItemId,
+            quantity: itemData.quantity || 0,
+            weight: itemData.weight || 0,
+            weightUnit: sourceItem.weightUnit,
+            length: itemData.length || 0,
+            lengthUnit: sourceItem.lengthUnit,
+            area: itemData.area || 0,
+            areaUnit: sourceItem.areaUnit,
+            volume: itemData.volume || 0,
+            volumeUnit: sourceItem.volumeUnit,
+          },
+
+          // Copy properties from source item if not specified
+          trackingType: sourceItem.trackingType,
+          itemType: sourceItem.itemType,
+          weightUnit: sourceItem.weightUnit,
+          lengthUnit: sourceItem.lengthUnit,
+          areaUnit: sourceItem.areaUnit,
+          volumeUnit: sourceItem.volumeUnit,
+          priceType: sourceItem.priceType,
+        });
+
+        // Set the measurement values based on the source item's tracking type
+        switch (sourceItem.trackingType) {
+          case "quantity":
+            derivedItem.quantity = itemData.quantity || 0;
+            break;
+          case "weight":
+            derivedItem.quantity = itemData.quantity || 0; // For package count
+            derivedItem.weight = itemData.weight || 0;
+            break;
+          case "length":
+            derivedItem.quantity = itemData.quantity || 0; // For package count
+            derivedItem.length = itemData.length || 0;
+            break;
+          case "area":
+            derivedItem.quantity = itemData.quantity || 0; // For package count
+            derivedItem.area = itemData.area || 0;
+            break;
+          case "volume":
+            derivedItem.quantity = itemData.quantity || 0; // For package count
+            derivedItem.volume = itemData.volume || 0;
+            break;
+        }
+
+        // Save the new derived item
+        await derivedItem.save(options);
+        resultItems.push(derivedItem);
+
+        // Add to the derived items references for the source item
+        derivedItemsRefs.push({
+          item: derivedItem._id,
+          quantity: itemData.quantity || 0,
+          weight: itemData.weight || 0,
+          weightUnit: sourceItem.weightUnit,
+          length: itemData.length || 0,
+          lengthUnit: sourceItem.lengthUnit,
+          area: itemData.area || 0,
+          areaUnit: sourceItem.areaUnit,
+          volume: itemData.volume || 0,
+          volumeUnit: sourceItem.volumeUnit,
+        });
+      }
     }
 
-    // Update the source item with derived items reference and reduce inventory
-    const derivedItemsRefs = createdItems.map((item) => ({
-      item: item._id,
-      quantity: item.derivedFrom.quantity,
-      weight: item.derivedFrom.weight,
-      weightUnit: item.derivedFrom.weightUnit,
-    }));
-
-    // Update source item's inventory and add derived item references
-    if (sourceItem.trackingType === "quantity") {
-      sourceItem.quantity -= totalQuantity;
-    } else if (sourceItem.trackingType === "weight") {
-      sourceItem.weight -= totalWeight;
+    // Update the source item's inventory based on tracking type
+    switch (trackingType) {
+      case "quantity":
+        sourceItem.quantity -= totalAllocated.quantity;
+        break;
+      case "weight":
+        sourceItem.weight -= totalAllocated.weight;
+        break;
+      case "length":
+        sourceItem.length -= totalAllocated.length;
+        break;
+      case "area":
+        sourceItem.area -= totalAllocated.area;
+        break;
+      case "volume":
+        sourceItem.volume -= totalAllocated.volume;
+        break;
     }
 
+    // Update the derived items references and last updated timestamp
     sourceItem.derivedItems = (sourceItem.derivedItems || []).concat(derivedItemsRefs);
     sourceItem.lastUpdated = new Date();
 
+    // Save the updated source item
     await sourceItem.save(options);
 
     return {
       sourceItem,
-      derivedItems: createdItems,
+      derivedItems: resultItems,
     };
   }
 
