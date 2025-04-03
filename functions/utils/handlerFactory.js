@@ -21,6 +21,8 @@ const getRepositoryForModel = (modelName) => {
       return providerFactory.getSalesRepository();
     case "purchase":
       return providerFactory.getPurchaseRepository();
+    case "assets":
+      return providerFactory.getAssetRepository();
     default:
       throw new Error(`Repository not found for model: ${modelName}`);
   }
