@@ -27,9 +27,10 @@ app.use(express.json());
 //   next();
 // });
 
-// Strip the /api prefix from incoming requests
+// Strip the /api prefix from incoming requests more robustly
 app.use("/api", (req, res, next) => {
-  req.url = req.url.replace(/^\/api/, ""); // Remove the /api prefix
+  // Remove only the first instance of /api at the start of the URL
+  req.url = req.url.replace(/^\/api/, "");
   next();
 });
 
