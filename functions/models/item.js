@@ -146,6 +146,75 @@ const ItemSchema = new mongoose.Schema({
       type: String,
       enum: ["oz", "lb", "g", "kg"],
     },
+    length: Number,
+    lengthUnit: {
+      type: String,
+      enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    },
+    area: Number,
+    areaUnit: {
+      type: String,
+      enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    },
+    volume: Number,
+    volumeUnit: {
+      type: String,
+      enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    },
+  }],
+  derivedFrom: {
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+    },
+    quantity: Number,
+    weight: Number,
+    weightUnit: {
+      type: String,
+      enum: ["oz", "lb", "g", "kg"],
+    },
+    length: Number,
+    lengthUnit: {
+      type: String,
+      enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    },
+    area: Number,
+    areaUnit: {
+      type: String,
+      enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    },
+    volume: Number,
+    volumeUnit: {
+      type: String,
+      enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    },
+  },
+  derivedItems: [{
+    item: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Item",
+    },
+    quantity: Number,
+    weight: Number,
+    weightUnit: {
+      type: String,
+      enum: ["oz", "lb", "g", "kg"],
+    },
+    length: Number,
+    lengthUnit: {
+      type: String,
+      enum: ["mm", "cm", "m", "in", "ft", "yd"],
+    },
+    area: Number,
+    areaUnit: {
+      type: String,
+      enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
+    },
+    volume: Number,
+    volumeUnit: {
+      type: String,
+      enum: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
+    },
   }],
 });
 

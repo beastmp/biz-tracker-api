@@ -1,5 +1,54 @@
 const mongoose = require("mongoose");
 
+// Define a schema for asset info
+const AssetInfoSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
+  },
+  category: {
+    type: String,
+    trim: true,
+  },
+  location: {
+    type: String,
+    trim: true,
+  },
+  assignedTo: {
+    type: String,
+    trim: true,
+  },
+}, {_id: false});
+
+// Define a schema for package info
+const PackageInfoSchema = new mongoose.Schema({
+  isPackage: {
+    type: Boolean,
+    default: false,
+  },
+  packageSize: {
+    value: {
+      type: Number,
+      required: function() {
+        return this.isPackage;
+      },
+    },
+    unit: {
+      type: String,
+      required: function() {
+        return this.isPackage;
+      },
+    },
+  },
+  quantityPerPackage: {
+    type: Number,
+    required: function() {
+      return this.isPackage;
+    },
+  },
+}, {_id: false});
+
+// Define a schema for purchase items
 const PurchaseItemSchema = new mongoose.Schema({
   item: {
     type: mongoose.Schema.Types.ObjectId,
@@ -8,18 +57,16 @@ const PurchaseItemSchema = new mongoose.Schema({
   },
   quantity: {
     type: Number,
-    min: 0,
     default: 0,
   },
   weight: {
     type: Number,
-    min: 0,
     default: 0,
   },
   weightUnit: {
     type: String,
     enum: ["oz", "lb", "g", "kg"],
-    default: "lb",
+    default: "kg",
   },
   length: {
     type: Number,
@@ -28,7 +75,7 @@ const PurchaseItemSchema = new mongoose.Schema({
   lengthUnit: {
     type: String,
     enum: ["mm", "cm", "m", "in", "ft", "yd"],
-    default: "in",
+    default: "m",
   },
   area: {
     type: Number,
@@ -37,7 +84,7 @@ const PurchaseItemSchema = new mongoose.Schema({
   areaUnit: {
     type: String,
     enum: ["sqft", "sqm", "sqyd", "acre", "ha"],
-    default: "sqft",
+    default: "sqm",
   },
   volume: {
     type: Number,
@@ -51,12 +98,21 @@ const PurchaseItemSchema = new mongoose.Schema({
   costPerUnit: {
     type: Number,
     required: true,
-    min: 0,
+  },
+  originalCost: {
+    type: Number,
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+  },
+  discountPercentage: {
+    type: Number,
+    default: 0,
   },
   totalCost: {
     type: Number,
     required: true,
-    min: 0,
   },
   discountAmount: {
     type: Number,
@@ -71,45 +127,41 @@ const PurchaseItemSchema = new mongoose.Schema({
     enum: ["quantity", "weight", "length", "area", "volume"],
     default: "quantity",
   },
-  packageInfo: {
-    isPackage: {
-      type: Boolean,
-      default: false,
-    },
-    packageSize: {
-      value: Number,
-      unit: String,
-    },
-    quantityPerPackage: {
-      type: Number,
-      default: 1,
-    },
+  packageInfo: PackageInfoSchema,
+  // New fields for asset tracking
+  isAsset: {
+    type: Boolean,
+    default: false,
   },
-});
+  assetInfo: AssetInfoSchema,
+}, {_id: false});
 
-const PurchaseSchema = new mongoose.Schema({
-  supplier: {
-    name: {
-      type: String,
-      trim: true,
-    },
-    contactName: {
-      type: String,
-      trim: true,
-    },
-    email: {
-      type: String,
-      trim: true,
-    },
-    phone: {
-      type: String,
-      trim: true,
-    },
+// Define a schema for suppliers
+const SupplierSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true,
   },
+  contactName: {
+    type: String,
+    trim: true,
+  },
+  email: {
+    type: String,
+    trim: true,
+  },
+  phone: {
+    type: String,
+    trim: true,
+  },
+}, {_id: false});
+
+// Define the main purchase schema
+const PurchaseSchema = new mongoose.Schema({
+  supplier: SupplierSchema,
   items: [PurchaseItemSchema],
   invoiceNumber: {
     type: String,
-    trim: true,
   },
   purchaseDate: {
     type: Date,
@@ -141,33 +193,17 @@ const PurchaseSchema = new mongoose.Schema({
   },
   notes: {
     type: String,
-    trim: true,
   },
   paymentMethod: {
     type: String,
     enum: ["cash", "credit", "debit", "check", "bank_transfer", "other"],
-    default: "other",
+    default: "cash",
   },
   status: {
     type: String,
-    required: true,
     enum: ["pending", "received", "partially_received", "cancelled"],
-    default: "received",
+    default: "pending",
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
-
-// Update timestamp on save
-PurchaseSchema.pre("save", function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
+}, {timestamps: true});
 
 module.exports = mongoose.model("Purchase", PurchaseSchema);
