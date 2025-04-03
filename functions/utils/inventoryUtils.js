@@ -413,8 +413,8 @@ async function rebuildItemInventory(itemId, providers) {
           costPerUnit = purchaseItem.costPerUnit;
         } else if (purchaseItem.totalCost &&
                  (purchaseItem.quantity || purchaseItem.weight ||
-                    purchaseItem.length ||
-                    purchaseItem.area || purchaseItem.volume)) {
+                  purchaseItem.length || purchaseItem.area ||
+                  purchaseItem.volume)) {
           // Calculate cost per unit based on tracking type
           const divisor =
             item.trackingType === "quantity" ? purchaseItem.quantity :
@@ -435,7 +435,7 @@ async function rebuildItemInventory(itemId, providers) {
       if (itemCosts.length > 0) {
         const maxCostPerUnit = Math.max(...itemCosts);
         console.log(`Calculated costs: [${itemCosts.join(", ")}],
-          using maximum: ${maxCostPerUnit}`);
+         using maximum: ${maxCostPerUnit}`);
 
         // Update cost if we have a valid value and it's changed
         if (item.cost !== maxCostPerUnit) {

@@ -43,12 +43,21 @@ router.post("/", async (req, res, next) => {
     const purchaseData = req.body;
     const purchaseRepository = getPurchaseRepository();
 
+    console.log(`Creating purchase with ${(purchaseData.items &&
+      purchaseData.items.length) || 0} items`);
+
     // If the status is 'received', we'll want to process any asset items
     const shouldProcessAssets = purchaseData.status === "received";
 
+    // Use transaction to ensure all operations are atomic
     const newPurchase = await withTransaction(async (transaction) => {
+      console.log(`Starting transaction for purchase creation`);
+
+      // Create the purchase with transaction
       const purchase =
         await purchaseRepository.create(purchaseData, transaction);
+      console.log(`Purchase created with ID: ${purchase._id},
+        updating inventory for ${purchase.items.length} items`);
 
       // If purchase is received and has asset items, create assets
       if (shouldProcessAssets) {
@@ -58,8 +67,10 @@ router.post("/", async (req, res, next) => {
       return purchase;
     });
 
+    console.log(`Purchase creation transaction completed successfully`);
     res.status(201).json(newPurchase);
   } catch (err) {
+    console.error("Error creating purchase:", err);
     next(err);
   }
 });

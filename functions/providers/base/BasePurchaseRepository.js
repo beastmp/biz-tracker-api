@@ -28,47 +28,183 @@ class BasePurchaseRepository extends PurchaseRepository {
    * @return {Promise<void>}
    */
   async updateInventoryForPurchase(items, transaction) {
+    // This is just a base implementation
+    // The MongoDB implementation will override
+    // this with a more efficient version
+    if (!this.itemRepository) {
+      throw new Error(`ItemRepository not available in BasePurchaseRepository`);
+    }
+
+    console.log(`Base implementation - Starting inventory update for
+      ${items && items.length || 0} purchase items`);
+
+    // Exit early if no items to process
+    if (!items || items.length === 0) {
+      console.log("No items to update inventory for");
+      return [];
+    }
+
+    // Group items by item ID to consolidate updates for the same item
+    const itemGroups = {};
+
+    // First pass: group items by their ID
+    for (const purchaseItem of items) {
+      if (!purchaseItem.item) {
+        console.warn("Skipping purchase item with no item reference");
+        continue;
+      }
+
+      const itemId = typeof purchaseItem.item === "object" ?
+        purchaseItem.item._id.toString() : purchaseItem.item.toString();
+
+      if (!itemGroups[itemId]) {
+        itemGroups[itemId] = [];
+      }
+
+      itemGroups[itemId].push(purchaseItem);
+    }
+
+    console.log(`Grouped purchase items into ${Object.keys(itemGroups).length}
+      unique items`);
+
+    // Use Promise.all to handle all updates in parallel
+    const updatePromises = [];
+
+    for (const [itemId, purchaseItems] of Object.entries(itemGroups)) {
+      updatePromises.push(this.updateInventoryForItem(itemId,
+          purchaseItems, transaction));
+    }
+
     try {
-      // This method requires access to the ItemRepository
-      // The specific implementation will need to provide this
-      if (!this.itemRepository) {
-        throw new Error(`ItemRepository not available
-          in BasePurchaseRepository`);
-      }
-
-      for (const purchaseItem of items) {
-        if (!purchaseItem.item) continue;
-
-        const itemId = typeof purchaseItem.item ===
-          "object" ? purchaseItem.item._id : purchaseItem.item;
-        const item = await this.itemRepository.findById(itemId);
-
-        if (!item) {
-          console.warn(`Item ${itemId} not found
-            when updating inventory for purchase`);
-          continue;
-        }
-
-        let updateData = {};
-
-        // Handle different tracking types
-        if (purchaseItem.weight && item.trackingType === "weight") {
-          // For weight tracked items
-          const newWeight = (item.weight || 0) + (purchaseItem.weight || 0);
-          updateData = {weight: newWeight};
-        } else {
-          // For quantity tracked items (default)
-          const newQuantity = (item.quantity || 0) +
-            (purchaseItem.quantity || 0);
-          updateData = {quantity: newQuantity};
-        }
-
-        // Update the item
-        await this.itemRepository.update(itemId, updateData, transaction);
-      }
+      // Execute all update promises and wait for all to complete
+      console.log(`Executing ${updatePromises.length}
+        inventory update operations`);
+      return await Promise.all(updatePromises);
     } catch (error) {
-      console.error("Error updating inventory for purchase:", error);
+      console.error(`Fatal error during inventory update:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Update inventory for a single item
+   * @param {string} itemId Item ID
+   * @param {Array} purchaseItems Purchase items for this item
+   * @param {Object} [transaction] Database transaction/session
+   * @return {Promise<Object>} Result of the update
+   * @private
+   */
+  async updateInventoryForItem(itemId, purchaseItems, transaction) {
+    try {
+      console.log(`Processing ${purchaseItems.length}
+        purchases for item ${itemId}`);
+
+      // Get the current state of the item
+      const item = await this.itemRepository.findById(itemId);
+
+      if (!item) {
+        console.warn(`Item ${itemId} not found
+          when updating inventory for purchase`);
+        return {
+          success: false,
+          itemId,
+          error: "Item not found",
+        };
+      }
+
+      // Aggregate all values from purchase items for this item
+      const aggregate = {
+        quantity: 0,
+        weight: 0,
+        length: 0,
+        area: 0,
+        volume: 0,
+        maxCostPerUnit: 0,
+        totalCost: 0,
+        totalMeasurement: 0,
+      };
+
+      // Calculate totals for all purchase items for this product
+      for (const purchaseItem of purchaseItems) {
+        aggregate.quantity += parseFloat(purchaseItem.quantity || 0);
+        aggregate.weight += parseFloat(purchaseItem.weight || 0);
+        aggregate.length += parseFloat(purchaseItem.length || 0);
+        aggregate.area += parseFloat(purchaseItem.area || 0);
+        aggregate.volume += parseFloat(purchaseItem.volume || 0);
+
+        // Track cost data for cost/price updates
+        const purchaseCost = purchaseItem.costPerUnit ||
+          (purchaseItem.totalCost && purchaseItem.quantity ?
+           purchaseItem.totalCost / purchaseItem.quantity : 0);
+
+        if (purchaseCost > aggregate.maxCostPerUnit) {
+          aggregate.maxCostPerUnit = purchaseCost;
+        }
+
+        aggregate.totalCost += parseFloat(purchaseItem.totalCost || 0);
+
+        if (item.trackingType === "weight") {
+          aggregate.totalMeasurement += parseFloat(purchaseItem.weight || 0);
+        } else if (item.trackingType === "length") {
+          aggregate.totalMeasurement += parseFloat(purchaseItem.length || 0);
+        } else if (item.trackingType === "area") {
+          aggregate.totalMeasurement += parseFloat(purchaseItem.area || 0);
+        } else if (item.trackingType === "volume") {
+          aggregate.totalMeasurement += parseFloat(purchaseItem.volume || 0);
+        } else {
+          aggregate.totalMeasurement += parseFloat(purchaseItem.quantity || 0);
+        }
+      }
+
+      // Update data to apply to the item
+      const updateData = {};
+
+      // Apply the appropriate measurement value based on tracking type
+      switch (item.trackingType) {
+        case "weight":
+          updateData.weight = (item.weight || 0) + aggregate.weight;
+          break;
+        case "length":
+          updateData.length = (item.length || 0) + aggregate.length;
+          break;
+        case "area":
+          updateData.area = (item.area || 0) + aggregate.area;
+          break;
+        case "volume":
+          updateData.volume = (item.volume || 0) + aggregate.volume;
+          break;
+        default:
+          // Default to quantity tracking
+          updateData.quantity = (item.quantity || 0) + aggregate.quantity;
+          break;
+      }
+
+      // Always update cost and price if we have valid cost data
+      if (aggregate.maxCostPerUnit > 0) {
+        updateData.cost = aggregate.maxCostPerUnit;
+        updateData.price = aggregate.maxCostPerUnit;
+      }
+
+      // Add last updated timestamp
+      updateData.lastUpdated = new Date();
+
+      // Apply the update to the item
+      const result = await this.itemRepository.update(itemId,
+          updateData, transaction);
+
+      return {
+        success: true,
+        itemId,
+        updateData,
+        item: result,
+      };
+    } catch (error) {
+      console.error(`Error updating inventory for item ${itemId}:`, error);
+      return {
+        success: false,
+        itemId,
+        error: error.message,
+      };
     }
   }
 

@@ -68,32 +68,47 @@ class MongoItemRepository extends BaseItemRepository {
    * @return {Promise<Object|null>} Updated item or null if not found
    */
   async update(id, itemData, transaction = null) {
+    console.log(`Updating item ${id} with transaction:`, !!transaction);
     const options = transaction ? {session: transaction} : {};
 
-    const item = await Item.findById(id);
-    if (!item) return null;
+    try {
+      const item = await Item.findById(id, null, options);
+      if (!item) {
+        console.warn(`Item ${id} not found for update`);
+        return null;
+      }
 
-    // Update all provided fields
-    Object.keys(itemData).forEach((key) => {
-      item[key] = itemData[key];
-    });
+      // Update all provided fields
+      Object.keys(itemData).forEach((key) => {
+        console.log(`Setting field ${key} to:`, itemData[key]);
+        item[key] = itemData[key];
+      });
 
-    await item.save(options);
+      // Save with explicit transaction if provided
+      console.log(`Saving item ${id} with transaction:`, !!transaction);
+      await item.save(options);
+      console.log(`Item ${id} saved successfully`);
 
-    // Handle component relationships if this is a product with components
-    if (item.type === "product" && item.components) {
-      // Get old component IDs before update
+      // Remember old components for relationship updates
       const oldComponentIds = item._previousComponents ?
         extractComponentIds(item._previousComponents) : [];
 
-      // Get new component IDs after update
-      const newComponentIds = extractComponentIds(item.components);
+      // Handle component relationships if this is a product with components
+      if (item.type === "product" && item.components) {
+        // Get new component IDs after update
+        const newComponentIds = extractComponentIds(item.components);
 
-      // Update relationships
-      await updateItemRelationships(oldComponentIds, newComponentIds, item._id);
+        // Update relationships - ensure we pass the transaction
+        await updateItemRelationships(
+            oldComponentIds, newComponentIds, item._id, transaction,
+        );
+      }
+
+      return item;
+    } catch (error) {
+      console.error(`Error updating item ${id}:`, error);
+      throw error;
     }
-
-    return item;
   }
 
   /**

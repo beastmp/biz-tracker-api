@@ -19,9 +19,11 @@ const extractComponentIds = (components) => {
  * @param {Array} oldIds - Array of old component IDs
  * @param {Array} newIds - Array of new component IDs
  * @param {string} productId - ID of the product being updated
+ * @param {Object} [transaction] - Optional database transaction
  * @return {Promise<void>}
  */
-const updateItemRelationships = async (oldIds, newIds, productId) => {
+const updateItemRelationships = async (oldIds,
+    newIds, productId, transaction = null) => {
   const itemRepository = getProviderFactory().getItemRepository();
 
   // Materials to remove this product from
@@ -38,12 +40,13 @@ const updateItemRelationships = async (oldIds, newIds, productId) => {
         const usedInProducts = component.usedInProducts || [];
         if (!usedInProducts.includes(productId)) {
           usedInProducts.push(productId);
-          await itemRepository.update(componentId, {usedInProducts});
+          await itemRepository.update(componentId,
+              {usedInProducts}, transaction);
         }
       }
     }
-    console.log(`Added product ${productId}
-      to ${addedComponentIds.length} materials`);
+    console.log(`Added product ${productId} to
+      ${addedComponentIds.length} materials`);
   }
 
   // Update usedInProducts for removed materials
@@ -53,11 +56,11 @@ const updateItemRelationships = async (oldIds, newIds, productId) => {
       if (component) {
         const usedInProducts = (component.usedInProducts || [])
             .filter((id) => id.toString() !== productId.toString());
-        await itemRepository.update(componentId, {usedInProducts});
+        await itemRepository.update(componentId, {usedInProducts}, transaction);
       }
     }
-    console.log(`Removed product ${productId}
-      from ${removedComponentIds.length} materials`);
+    console.log(`Removed product ${productId} from
+      ${removedComponentIds.length} materials`);
   }
 };
 
