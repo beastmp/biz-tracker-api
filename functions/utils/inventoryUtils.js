@@ -70,6 +70,8 @@ async function rebuildInventory(providers, options = {}) {
 async function rebuildItemInventory(itemId, providers) {
   const {itemRepository, purchaseRepository, salesRepository} = providers;
 
+  console.log(`Rebuilding inventory for item: ${itemId}`);
+
   // Get the item
   const item = await itemRepository.findById(itemId);
   if (!item) {
@@ -96,8 +98,11 @@ async function rebuildItemInventory(itemId, providers) {
 
   // 1. Get all purchases for this item
   const purchases = await purchaseRepository.getAllByItemId(itemId);
+  console.log(`Found ${purchases.length} purchases for item ${itemId}`);
+
   // Filter to only include received purchases
   const receivedPurchases = purchases.filter((p) => p.status === "received");
+  console.log(`Found ${receivedPurchases.length} received purchases for item ${itemId}`);
 
   // 2. Get all sales for this item
   const sales = await salesRepository.getAllByItemId(itemId);
@@ -110,25 +115,46 @@ async function rebuildItemInventory(itemId, providers) {
   // Handle different tracking types
   switch (item.trackingType) {
     case "quantity": {
-      // Sum quantities from received purchases
-      const purchasedQuantity = receivedPurchases.reduce((total, purchase) => {
-        const purchaseItem = purchase.items.find((i) =>
+      // Collect ALL matching purchase items across all purchases
+      let allPurchaseItems = [];
+      for (const purchase of receivedPurchases) {
+        // Find ALL matching items in this purchase (there could be multiple)
+        const matchingItems = purchase.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return purchaseItem ? total + (purchaseItem.quantity || 0) : total;
-      }, 0);
 
-      // Subtract quantities from completed sales
-      const soldQuantity = completedSales.reduce((total, sale) => {
-        const saleItem = sale.items.find((i) =>
+        if (matchingItems.length > 0) {
+          console.log(`Found ${matchingItems.length} matching items in purchase ${purchase._id}`);
+          allPurchaseItems = [...allPurchaseItems, ...matchingItems];
+        }
+      }
+
+      // Calculate total purchased quantity from all matching items
+      const purchasedQuantity = allPurchaseItems.reduce((total, item) =>
+        total + (item.quantity || 0), 0);
+
+      console.log(`Total purchased quantity for item ${itemId}: ${purchasedQuantity}`);
+
+      // Collect ALL matching sale items across all sales
+      let allSaleItems = [];
+      for (const sale of completedSales) {
+        const matchingItems = sale.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return saleItem ? total + (saleItem.quantity || 0) : total;
-      }, 0);
+
+        if (matchingItems.length > 0) {
+          allSaleItems = [...allSaleItems, ...matchingItems];
+        }
+      }
+
+      // Calculate total sold quantity from all matching items
+      const soldQuantity = allSaleItems.reduce((total, item) =>
+        total + (item.quantity || 0), 0);
 
       newQuantity = Math.max(0, purchasedQuantity - soldQuantity);
+      console.log(`Calculated new quantity: ${newQuantity} (purchased: ${purchasedQuantity}, sold: ${soldQuantity})`);
 
       // Update if quantity changed
       if (item.quantity !== newQuantity) {
@@ -144,23 +170,36 @@ async function rebuildItemInventory(itemId, providers) {
       break;
     }
     case "weight": {
-      // Sum weights from received purchases
-      const purchasedWeight = receivedPurchases.reduce((total, purchase) => {
-        const purchaseItem = purchase.items.find((i) =>
+      // Use the same pattern for weight-tracked items
+      let allPurchaseItems = [];
+      for (const purchase of receivedPurchases) {
+        const matchingItems = purchase.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return purchaseItem ? total + (purchaseItem.weight || 0) : total;
-      }, 0);
 
-      // Subtract weights from completed sales
-      const soldWeight = completedSales.reduce((total, sale) => {
-        const saleItem = sale.items.find((i) =>
+        if (matchingItems.length > 0) {
+          allPurchaseItems = [...allPurchaseItems, ...matchingItems];
+        }
+      }
+
+      const purchasedWeight = allPurchaseItems.reduce((total, item) =>
+        total + (item.weight || 0), 0);
+
+      let allSaleItems = [];
+      for (const sale of completedSales) {
+        const matchingItems = sale.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return saleItem ? total + (saleItem.weight || 0) : total;
-      }, 0);
+
+        if (matchingItems.length > 0) {
+          allSaleItems = [...allSaleItems, ...matchingItems];
+        }
+      }
+
+      const soldWeight = allSaleItems.reduce((total, item) =>
+        total + (item.weight || 0), 0);
 
       newQuantity = Math.max(0, purchasedWeight - soldWeight);
 
@@ -177,26 +216,42 @@ async function rebuildItemInventory(itemId, providers) {
       }
       break;
     }
-    // Similar implementation for other tracking types
-    case "length": {
-      // Handle length similarly
-      const purchasedLength = receivedPurchases.reduce((total, purchase) => {
-        const purchaseItem = purchase.items.find((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
-          (i.item && typeof i.item === "string" && i.item === itemId),
-        );
-        return purchaseItem ? total + (purchaseItem.length || 0) : total;
-      }, 0);
 
-      const soldLength = completedSales.reduce((total, sale) => {
-        const saleItem = sale.items.find((i) =>
+    // Apply the same pattern to the other tracking types
+    case "length": {
+      // Handle length using same approach as quantity and weight
+      let allPurchaseItems = [];
+      for (const purchase of receivedPurchases) {
+        const matchingItems = purchase.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return saleItem ? total + (saleItem.length || 0) : total;
-      }, 0);
+
+        if (matchingItems.length > 0) {
+          allPurchaseItems = [...allPurchaseItems, ...matchingItems];
+        }
+      }
+
+      const purchasedLength = allPurchaseItems.reduce((total, item) =>
+        total + (item.length || 0), 0);
+
+      let allSaleItems = [];
+      for (const sale of completedSales) {
+        const matchingItems = sale.items.filter((i) =>
+          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "string" && i.item === itemId),
+        );
+
+        if (matchingItems.length > 0) {
+          allSaleItems = [...allSaleItems, ...matchingItems];
+        }
+      }
+
+      const soldLength = allSaleItems.reduce((total, item) =>
+        total + (item.length || 0), 0);
 
       newQuantity = Math.max(0, purchasedLength - soldLength);
+      console.log(`Calculated new length: ${newQuantity} (purchased: ${purchasedLength}, sold: ${soldLength})`);
 
       if (item.length !== newQuantity) {
         item.length = newQuantity;
@@ -204,29 +259,47 @@ async function rebuildItemInventory(itemId, providers) {
         result.changes.length = {
           from: originalQuantity,
           to: newQuantity,
+          purchasedLength,
+          soldLength,
         };
       }
       break;
     }
-    case "area": {
-      // Handle area similarly
-      const purchasedArea = receivedPurchases.reduce((total, purchase) => {
-        const purchaseItem = purchase.items.find((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
-          (i.item && typeof i.item === "string" && i.item === itemId),
-        );
-        return purchaseItem ? total + (purchaseItem.area || 0) : total;
-      }, 0);
 
-      const soldArea = completedSales.reduce((total, sale) => {
-        const saleItem = sale.items.find((i) =>
+    case "area": {
+      // Handle area using same approach
+      let allPurchaseItems = [];
+      for (const purchase of receivedPurchases) {
+        const matchingItems = purchase.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return saleItem ? total + (saleItem.area || 0) : total;
-      }, 0);
+
+        if (matchingItems.length > 0) {
+          allPurchaseItems = [...allPurchaseItems, ...matchingItems];
+        }
+      }
+
+      const purchasedArea = allPurchaseItems.reduce((total, item) =>
+        total + (item.area || 0), 0);
+
+      let allSaleItems = [];
+      for (const sale of completedSales) {
+        const matchingItems = sale.items.filter((i) =>
+          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "string" && i.item === itemId),
+        );
+
+        if (matchingItems.length > 0) {
+          allSaleItems = [...allSaleItems, ...matchingItems];
+        }
+      }
+
+      const soldArea = allSaleItems.reduce((total, item) =>
+        total + (item.area || 0), 0);
 
       newQuantity = Math.max(0, purchasedArea - soldArea);
+      console.log(`Calculated new area: ${newQuantity} (purchased: ${purchasedArea}, sold: ${soldArea})`);
 
       if (item.area !== newQuantity) {
         item.area = newQuantity;
@@ -234,29 +307,47 @@ async function rebuildItemInventory(itemId, providers) {
         result.changes.area = {
           from: originalQuantity,
           to: newQuantity,
+          purchasedArea,
+          soldArea,
         };
       }
       break;
     }
-    case "volume": {
-      // Handle volume similarly
-      const purchasedVolume = receivedPurchases.reduce((total, purchase) => {
-        const purchaseItem = purchase.items.find((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
-          (i.item && typeof i.item === "string" && i.item === itemId),
-        );
-        return purchaseItem ? total + (purchaseItem.volume || 0) : total;
-      }, 0);
 
-      const soldVolume = completedSales.reduce((total, sale) => {
-        const saleItem = sale.items.find((i) =>
+    case "volume": {
+      // Handle volume using same approach
+      let allPurchaseItems = [];
+      for (const purchase of receivedPurchases) {
+        const matchingItems = purchase.items.filter((i) =>
           (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
-        return saleItem ? total + (saleItem.volume || 0) : total;
-      }, 0);
+
+        if (matchingItems.length > 0) {
+          allPurchaseItems = [...allPurchaseItems, ...matchingItems];
+        }
+      }
+
+      const purchasedVolume = allPurchaseItems.reduce((total, item) =>
+        total + (item.volume || 0), 0);
+
+      let allSaleItems = [];
+      for (const sale of completedSales) {
+        const matchingItems = sale.items.filter((i) =>
+          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "string" && i.item === itemId),
+        );
+
+        if (matchingItems.length > 0) {
+          allSaleItems = [...allSaleItems, ...matchingItems];
+        }
+      }
+
+      const soldVolume = allSaleItems.reduce((total, item) =>
+        total + (item.volume || 0), 0);
 
       newQuantity = Math.max(0, purchasedVolume - soldVolume);
+      console.log(`Calculated new volume: ${newQuantity} (purchased: ${purchasedVolume}, sold: ${soldVolume})`);
 
       if (item.volume !== newQuantity) {
         item.volume = newQuantity;
@@ -264,6 +355,8 @@ async function rebuildItemInventory(itemId, providers) {
         result.changes.volume = {
           from: originalQuantity,
           to: newQuantity,
+          purchasedVolume,
+          soldVolume,
         };
       }
       break;
@@ -280,51 +373,64 @@ async function rebuildItemInventory(itemId, providers) {
     // Get the most recent purchase
     const latestPurchase = sortedPurchases[0];
 
-    // Find this item in the purchase
-    const purchaseItem = latestPurchase.items.find((i) =>
+    // Find ALL matching items in the purchase (there could be multiple)
+    const purchaseItems = latestPurchase.items.filter((i) =>
       (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
       (i.item && typeof i.item === "string" && i.item === itemId),
     );
 
-    if (purchaseItem) {
-      // Calculate cost per unit
-      let costPerUnit = null;
+    if (purchaseItems.length > 0) {
+      console.log(`Found ${purchaseItems.length} matching items in latest purchase ${latestPurchase._id}`);
 
-      if (purchaseItem.costPerUnit) {
-        // Use the cost per unit directly if available
-        costPerUnit = purchaseItem.costPerUnit;
-      } else if (purchaseItem.totalCost &&
-                (purchaseItem.quantity || purchaseItem.weight || purchaseItem.length ||
-                 purchaseItem.area || purchaseItem.volume)) {
-        // Calculate cost per unit based on tracking type
-        const divisor = item.trackingType === "quantity" ? purchaseItem.quantity :
-                        item.trackingType === "weight" ? purchaseItem.weight :
-                        item.trackingType === "length" ? purchaseItem.length :
-                        item.trackingType === "area" ? purchaseItem.area :
-                        item.trackingType === "volume" ? purchaseItem.volume : 1;
+      // Calculate cost per unit for each matching item
+      const itemCosts = purchaseItems.map((purchaseItem) => {
+        let costPerUnit = null;
 
-        if (divisor > 0) {
-          costPerUnit = purchaseItem.totalCost / divisor;
+        if (purchaseItem.costPerUnit) {
+          // Use the cost per unit directly if available
+          costPerUnit = purchaseItem.costPerUnit;
+        } else if (purchaseItem.totalCost &&
+                 (purchaseItem.quantity || purchaseItem.weight || purchaseItem.length ||
+                  purchaseItem.area || purchaseItem.volume)) {
+          // Calculate cost per unit based on tracking type
+          const divisor = item.trackingType === "quantity" ? purchaseItem.quantity :
+                         item.trackingType === "weight" ? purchaseItem.weight :
+                         item.trackingType === "length" ? purchaseItem.length :
+                         item.trackingType === "area" ? purchaseItem.area :
+                         item.trackingType === "volume" ? purchaseItem.volume : 1;
+
+          if (divisor > 0) {
+            costPerUnit = purchaseItem.totalCost / divisor;
+          }
         }
-      }
 
-      // Update cost if we have a valid value and it's changed
-      if (costPerUnit !== null && item.cost !== costPerUnit) {
-        item.cost = costPerUnit;
-        result.updated = true;
-        result.changes.cost = {
-          from: originalCost,
-          to: costPerUnit,
-          source: `Purchase ${latestPurchase._id} (${new Date(latestPurchase.purchaseDate).toLocaleDateString()})`,
-        };
+        return costPerUnit;
+      }).filter((cost) => cost !== null);
 
-        // Also update the selling price to match the cost
-        if (item.price !== costPerUnit) {
-          item.price = costPerUnit;
-          result.changes.price = {
-            from: originalPrice,
-            to: costPerUnit,
+      // Find the maximum cost among all matching items
+      if (itemCosts.length > 0) {
+        const maxCostPerUnit = Math.max(...itemCosts);
+        console.log(`Calculated costs: [${itemCosts.join(", ")}], using maximum: ${maxCostPerUnit}`);
+
+        // Update cost if we have a valid value and it's changed
+        if (item.cost !== maxCostPerUnit) {
+          item.cost = maxCostPerUnit;
+          result.updated = true;
+          result.changes.cost = {
+            from: originalCost,
+            to: maxCostPerUnit,
+            source: `Maximum cost from purchase ${latestPurchase._id} (${new Date(latestPurchase.purchaseDate).toLocaleDateString()})`,
+            allCosts: itemCosts,
           };
+
+          // Also update the selling price to match the cost
+          if (item.price !== maxCostPerUnit) {
+            item.price = maxCostPerUnit;
+            result.changes.price = {
+              from: originalPrice,
+              to: maxCostPerUnit,
+            };
+          }
         }
       }
     }
@@ -332,9 +438,12 @@ async function rebuildItemInventory(itemId, providers) {
 
   // 5. Save the updated item if there were changes
   if (result.updated) {
+    console.log(`Updating item ${itemId} with new values`);
     // Mark item as last updated now
     item.lastUpdated = new Date();
     await itemRepository.update(itemId, item);
+  } else {
+    console.log(`No changes needed for item ${itemId}`);
   }
 
   return result;
