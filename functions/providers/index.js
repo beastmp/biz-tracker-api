@@ -1,12 +1,9 @@
-const ProviderRegistry = require("./registry");
 const ProviderFactory = require("./providerFactory");
 const registerProvidersModule = require("./registerProviders");
 
 // Make sure we correctly extract the function
 const registerAllProviders = registerProvidersModule.registerAllProviders;
 
-// Create a separate factory object to avoid circular dependencies
-const providerFactory = {};
 // Declare the instance variable
 let providerFactoryInstance = null;
 
@@ -17,7 +14,8 @@ let providerFactoryInstance = null;
  */
 const getProviderFactoryInstance = () => {
   if (!providerFactoryInstance) {
-    throw new Error("Providers have not been initialized. Call initializeProviders() first");
+    throw new Error(`Providers have not been initialized.
+      Call initializeProviders() first`);
   }
   return providerFactoryInstance;
 };

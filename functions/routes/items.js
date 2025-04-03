@@ -74,7 +74,8 @@ router.get("/:id", async (req, res, next) => {
     const {id} = req.params;
     const {populate = "false"} = req.query;
 
-    // For populated requests, use a custom approach to ensure all relationships are populated
+    // For populated requests, use a custom approach
+    // to ensure all relationships are populated
     if (populate === "true") {
       // Add debug logging
       console.log(`Fetching item ${id} with populated relationships`);
@@ -92,7 +93,8 @@ router.get("/:id", async (req, res, next) => {
 
       // Add debug logging for relationships
       console.log(`Item ${id} found. Has derivedFrom:`, !!item.derivedFrom);
-      console.log(`Item ${id} has ${item.derivedItems ? item.derivedItems.length : 0} derived items`);
+      console.log(`Item ${id} has ${item.derivedItems ?
+        item.derivedItems.length : 0} derived items`);
 
       return res.json(item);
     }
@@ -171,17 +173,20 @@ router.post("/:id/breakdown", async (req, res, next) => {
     const {derivedItems} = req.body;
 
     // Debug: Log the request parameters
-    console.log(`Creating breakdown items for source ${sourceItemId} with ${derivedItems?.length || 0} items`);
+    console.log(`Creating breakdown items for source
+      ${sourceItemId} with ${derivedItems && derivedItems.length || 0} items`);
 
     if (!sourceItemId) {
       return res.status(400).json({message: "Source item ID is required"});
     }
 
-    if (!derivedItems || !Array.isArray(derivedItems) || derivedItems.length === 0) {
+    if (!derivedItems || !Array.isArray(derivedItems) ||
+        derivedItems.length === 0) {
       return res.status(400).json({message: "Derived items are required"});
     }
 
-    // Validate that each derived item has the necessary data based on whether it's new or existing
+    // Validate that each derived item has the necessary data
+    // based on whether it's new or existing
     for (const item of derivedItems) {
       if (item.itemId) {
         // Existing item - must have valid measurement values
@@ -191,7 +196,8 @@ router.post("/:id/breakdown", async (req, res, next) => {
             item.area === undefined &&
             item.volume === undefined) {
           return res.status(400).json({
-            message: "Each allocation must include a valid measurement value (quantity, weight, length, area, or volume)",
+            message: `Each allocation must include a valid measurement
+              value (quantity, weight, length, area, or volume)`,
           });
         }
       } else {
@@ -207,7 +213,8 @@ router.post("/:id/breakdown", async (req, res, next) => {
             item.area === undefined &&
             item.volume === undefined) {
           return res.status(400).json({
-            message: "Each derived item must include a valid measurement value (quantity, weight, length, area, or volume)",
+            message: `Each derived item must include a valid measurement
+              value (quantity, weight, length, area, or volume)`,
           });
         }
       }
@@ -216,18 +223,20 @@ router.post("/:id/breakdown", async (req, res, next) => {
     // Use transaction to ensure all operations succeed or fail together
     const result = await withTransaction(async (transaction) => {
       const itemRepo = getItemRepository();
-      return await itemRepo.createDerivedItems(sourceItemId, derivedItems, transaction);
+      return await itemRepo.createDerivedItems(sourceItemId,
+          derivedItems, transaction);
     });
 
     // Debug: Log the result
-    console.log(`Successfully created ${result.derivedItems.length} derived items`);
+    console.log(`Successfully created
+      ${result.derivedItems.length} derived items`);
 
     // Check each derived item for proper derivedFrom
     result.derivedItems.forEach((item, idx) => {
       console.log(`Derived item ${idx + 1}: ${item._id}`, {
         name: item.name,
         hasDerivedFrom: !!item.derivedFrom,
-        derivedFromItem: item.derivedFrom?.item
+        derivedFromItem: item.derivedFrom && item.derivedFrom.item,
       });
     });
 

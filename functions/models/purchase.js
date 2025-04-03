@@ -114,14 +114,6 @@ const PurchaseItemSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  discountAmount: {
-    type: Number,
-    default: 0,
-  },
-  discountPercentage: {
-    type: Number,
-    default: 0,
-  },
   purchasedBy: {
     type: String,
     enum: ["quantity", "weight", "length", "area", "volume"],

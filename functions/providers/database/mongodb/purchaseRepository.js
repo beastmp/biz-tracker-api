@@ -46,7 +46,8 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
 
     // Update inventory quantities for the purchased items
     // Only update if status indicates items were received
-    if (purchase.status === "received" || purchase.status === "partially_received") {
+    if (purchase.status === "received" ||
+        purchase.status === "partially_received") {
       await this.updateInventoryForPurchase(purchase.items, transaction);
     }
 
@@ -96,10 +97,12 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
    */
   async updateInventoryForPurchase(items, transaction) {
     if (!this.itemRepository) {
-      throw new Error(`ItemRepository not available in MongoPurchaseRepository`);
+      throw new Error(`ItemRepository not available
+        in MongoPurchaseRepository`);
     }
 
-    console.log(`Starting inventory update for ${items && items.length || 0} purchase items`);
+    console.log(`Starting inventory update
+        for ${items && items.length || 0} purchase items`);
 
     // Exit early if no items to process
     if (!items || items.length === 0) {
@@ -127,7 +130,8 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
       itemGroups[itemId].push(purchaseItem);
     }
 
-    console.log(`Grouped purchase items into ${Object.keys(itemGroups).length} unique items`);
+    console.log(`Grouped purchase items into
+        ${Object.keys(itemGroups).length} unique items`);
 
     // Create an array of update promises - one for each unique item
     const updatePromises = [];
@@ -136,13 +140,15 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
     for (const [itemId, purchaseItems] of Object.entries(itemGroups)) {
       updatePromises.push((async () => {
         try {
-          console.log(`Processing ${purchaseItems.length} purchases for item ${itemId}`);
+          console.log(`Processing ${purchaseItems.length}
+            purchases for item ${itemId}`);
 
           // Get the current state of the item
           const item = await this.itemRepository.findById(itemId);
 
           if (!item) {
-            console.warn(`Item ${itemId} not found when updating inventory for purchase`);
+            console.warn(`Item ${itemId} not found
+              when updating inventory for purchase`);
             return {
               success: false,
               itemId,
@@ -150,7 +156,8 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
             };
           }
 
-          console.log(`Found item ${itemId}: ${item.name}, tracking type: ${item.trackingType || "quantity"}`);
+          console.log(`Found item ${itemId}: ${item.name},
+            tracking type: ${item.trackingType || "quantity"}`);
 
           // Aggregate all values from purchase items for this item
           const aggregate = {
@@ -188,16 +195,21 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
 
             // Add to total measurement based on tracking type
             if (item.trackingType === "weight") {
-              aggregate.totalMeasurement += parseFloat(purchaseItem.weight || 0);
+              aggregate.totalMeasurement +=
+              parseFloat(purchaseItem.weight || 0);
             } else if (item.trackingType === "length") {
-              aggregate.totalMeasurement += parseFloat(purchaseItem.length || 0);
+              aggregate.totalMeasurement +=
+              parseFloat(purchaseItem.length || 0);
             } else if (item.trackingType === "area") {
-              aggregate.totalMeasurement += parseFloat(purchaseItem.area || 0);
+              aggregate.totalMeasurement +=
+              parseFloat(purchaseItem.area || 0);
             } else if (item.trackingType === "volume") {
-              aggregate.totalMeasurement += parseFloat(purchaseItem.volume || 0);
+              aggregate.totalMeasurement +=
+              parseFloat(purchaseItem.volume || 0);
             } else {
               // Default to quantity tracking
-              aggregate.totalMeasurement += parseFloat(purchaseItem.quantity || 0);
+              aggregate.totalMeasurement +=
+              parseFloat(purchaseItem.quantity || 0);
             }
           }
 
@@ -208,54 +220,63 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
 
           // Apply the appropriate measurement value based on tracking type
           switch (item.trackingType) {
-            case "weight":
+            case "weight": {
               const currentWeight = parseFloat(item.weight || 0);
               const newWeight = currentWeight + aggregate.weight;
               updateData.weight = newWeight;
-              console.log(`Updating weight for item ${itemId}: ${currentWeight} + ${aggregate.weight} = ${newWeight}`);
+              console.log(`Updating weight for item ${itemId}:
+                ${currentWeight} + ${aggregate.weight} = ${newWeight}`);
               break;
-
-            case "length":
+            }
+            case "length": {
               const currentLength = parseFloat(item.length || 0);
               const newLength = currentLength + aggregate.length;
               updateData.length = newLength;
-              console.log(`Updating length for item ${itemId}: ${currentLength} + ${aggregate.length} = ${newLength}`);
+              console.log(`Updating length for item ${itemId}:
+                ${currentLength} + ${aggregate.length} = ${newLength}`);
               break;
-
-            case "area":
+            }
+            case "area": {
               const currentArea = parseFloat(item.area || 0);
               const newArea = currentArea + aggregate.area;
               updateData.area = newArea;
-              console.log(`Updating area for item ${itemId}: ${currentArea} + ${aggregate.area} = ${newArea}`);
+              console.log(`Updating area for item ${itemId}:
+                ${currentArea} + ${aggregate.area} = ${newArea}`);
               break;
-
-            case "volume":
+            }
+            case "volume": {
               const currentVolume = parseFloat(item.volume || 0);
               const newVolume = currentVolume + aggregate.volume;
               updateData.volume = newVolume;
-              console.log(`Updating volume for item ${itemId}: ${currentVolume} + ${aggregate.volume} = ${newVolume}`);
+              console.log(`Updating volume for item ${itemId}:
+                ${currentVolume} + ${aggregate.volume} = ${newVolume}`);
               break;
-
-            default:
+            }
+            default: {
               // Default to quantity tracking
               const currentQuantity = parseFloat(item.quantity || 0);
               const newQuantity = currentQuantity + aggregate.quantity;
               updateData.quantity = newQuantity;
-              console.log(`Updating quantity for item ${itemId}: ${currentQuantity} + ${aggregate.quantity} = ${newQuantity}`);
+              console.log(`Updating quantity for item ${itemId}:
+                ${currentQuantity} + ${aggregate.quantity} = ${newQuantity}`);
               break;
+            }
           }
 
           // Always update cost and price if we have valid cost data
           if (aggregate.maxCostPerUnit > 0) {
             updateData.cost = aggregate.maxCostPerUnit;
             updateData.price = aggregate.maxCostPerUnit;
-            console.log(`Updating cost/price for item ${itemId} to ${aggregate.maxCostPerUnit} (highest cost per unit)`);
-          } else if (aggregate.totalCost > 0 && aggregate.totalMeasurement > 0) {
+            console.log(`Updating cost/price for item ${itemId}
+              to ${aggregate.maxCostPerUnit} (highest cost per unit)`);
+          } else if (aggregate.totalCost >
+              0 && aggregate.totalMeasurement > 0) {
             // Calculate average cost if direct cost per unit wasn't available
             const avgCost = aggregate.totalCost / aggregate.totalMeasurement;
             updateData.cost = avgCost;
             updateData.price = avgCost;
-            console.log(`Updating cost/price for item ${itemId} to ${avgCost} (calculated from total cost / total measurement)`);
+            console.log(`Updating cost/price for item ${itemId}
+              to ${avgCost} (calculated from total cost / total measurement)`);
           }
 
           // Add last updated timestamp
@@ -265,9 +286,11 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
           console.log(`Saving item ${itemId} with data:`, updateData);
 
           // Use itemRepository.update to ensure proper transaction handling
-          const result = await this.itemRepository.update(itemId, updateData, transaction);
+          const result =
+            await this.itemRepository.update(itemId, updateData, transaction);
 
-          console.log(`Item ${itemId} update result:`, result ? "Success" : "Failed");
+          console.log(`Item ${itemId} update result:`,
+            result ? "Success" : "Failed");
 
           return {
             success: true,
@@ -297,13 +320,15 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
 
     try {
       // Execute all update promises and wait for all to complete
-      console.log(`Executing ${updatePromises.length} inventory update operations`);
+      console.log(`Executing ${updatePromises.length}
+        inventory update operations`);
       const results = await Promise.all(updatePromises);
 
       const successCount = results.filter((r) => r && r.success).length;
       const failureCount = results.length - successCount;
 
-      console.log(`Inventory update complete: ${successCount} successes, ${failureCount} failures`);
+      console.log(`Inventory update complete:
+        ${successCount} successes, ${failureCount} failures`);
 
       return results;
     } catch (error) {
@@ -336,10 +361,12 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
    */
   async revertInventoryForPurchase(items, transaction) {
     if (!this.itemRepository) {
-      throw new Error(`ItemRepository not available in MongoPurchaseRepository`);
+      throw new Error(`ItemRepository not available
+        in MongoPurchaseRepository`);
     }
 
-    console.log(`Starting inventory revert for ${items && items.length || 0} purchase items`);
+    console.log(`Starting inventory revert for
+      ${items && items.length || 0} purchase items`);
 
     // Exit early if no items to process
     if (!items || items.length === 0) {
@@ -367,7 +394,8 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
       itemGroups[itemId].push(purchaseItem);
     }
 
-    console.log(`Grouped purchase items into ${Object.keys(itemGroups).length} unique items for revert`);
+    console.log(`Grouped purchase items
+      into ${Object.keys(itemGroups).length} unique items for revert`);
 
     // Create an array of revert promises - one for each unique item
     const revertPromises = [];
@@ -376,13 +404,15 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
     for (const [itemId, purchaseItems] of Object.entries(itemGroups)) {
       revertPromises.push((async () => {
         try {
-          console.log(`Processing ${purchaseItems.length} purchases to revert for item ${itemId}`);
+          console.log(`Processing ${purchaseItems.length}
+            purchases to revert for item ${itemId}`);
 
           // Get the current state of the item
           const item = await this.itemRepository.findById(itemId);
 
           if (!item) {
-            console.warn(`Item ${itemId} not found when reverting inventory for purchase`);
+            console.warn(`Item ${itemId} not found
+              when reverting inventory for purchase`);
             return {
               success: false,
               itemId,
@@ -390,7 +420,8 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
             };
           }
 
-          console.log(`Found item ${itemId}: ${item.name}, tracking type: ${item.trackingType || "quantity"}`);
+          console.log(`Found item ${itemId}: ${item.name},
+            tracking type: ${item.trackingType || "quantity"}`);
 
           // Aggregate all values from purchase items for this item
           const aggregate = {
@@ -411,48 +442,56 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
             aggregate.volume += parseFloat(purchaseItem.volume || 0);
           }
 
-          console.log(`Aggregate values to revert for item ${itemId}: `, aggregate);
+          console.log(`Aggregate values to revert for item ${itemId}: `,
+              aggregate);
 
           // Update data to apply to the item
           const updateData = {};
 
           // Apply the appropriate measurement value based on tracking type
           switch (item.trackingType) {
-            case "weight":
+            case "weight": {
               const currentWeight = parseFloat(item.weight || 0);
               const newWeight = Math.max(0, currentWeight - aggregate.weight);
               updateData.weight = newWeight;
-              console.log(`Reverting weight for item ${itemId}: ${currentWeight} - ${aggregate.weight} = ${newWeight}`);
+              console.log(`Reverting weight for item ${itemId}:
+                ${currentWeight} - ${aggregate.weight} = ${newWeight}`);
               break;
-
-            case "length":
+            }
+            case "length": {
               const currentLength = parseFloat(item.length || 0);
               const newLength = Math.max(0, currentLength - aggregate.length);
               updateData.length = newLength;
-              console.log(`Reverting length for item ${itemId}: ${currentLength} - ${aggregate.length} = ${newLength}`);
+              console.log(`Reverting length for item ${itemId}:
+                ${currentLength} - ${aggregate.length} = ${newLength}`);
               break;
-
-            case "area":
+            }
+            case "area": {
               const currentArea = parseFloat(item.area || 0);
               const newArea = Math.max(0, currentArea - aggregate.area);
               updateData.area = newArea;
-              console.log(`Reverting area for item ${itemId}: ${currentArea} - ${aggregate.area} = ${newArea}`);
+              console.log(`Reverting area for item ${itemId}:
+                ${currentArea} - ${aggregate.area} = ${newArea}`);
               break;
-
-            case "volume":
+            }
+            case "volume": {
               const currentVolume = parseFloat(item.volume || 0);
               const newVolume = Math.max(0, currentVolume - aggregate.volume);
               updateData.volume = newVolume;
-              console.log(`Reverting volume for item ${itemId}: ${currentVolume} - ${aggregate.volume} = ${newVolume}`);
+              console.log(`Reverting volume for item ${itemId}:
+                ${currentVolume} - ${aggregate.volume} = ${newVolume}`);
               break;
-
-            default:
+            }
+            default: {
               // Default to quantity tracking
               const currentQuantity = parseFloat(item.quantity || 0);
-              const newQuantity = Math.max(0, currentQuantity - aggregate.quantity);
+              const newQuantity =
+                Math.max(0, currentQuantity - aggregate.quantity);
               updateData.quantity = newQuantity;
-              console.log(`Reverting quantity for item ${itemId}: ${currentQuantity} - ${aggregate.quantity} = ${newQuantity}`);
+              console.log(`Reverting quantity for item ${itemId}:
+                ${currentQuantity} - ${aggregate.quantity} = ${newQuantity}`);
               break;
+            }
           }
 
           // Add last updated timestamp
@@ -462,9 +501,11 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
           console.log(`Saving reverted item ${itemId} with data:`, updateData);
 
           // Use itemRepository.update to ensure proper transaction handling
-          const result = await this.itemRepository.update(itemId, updateData, transaction);
+          const result =
+            await this.itemRepository.update(itemId, updateData, transaction);
 
-          console.log(`Item ${itemId} revert result:`, result ? "Success" : "Failed");
+          console.log(`Item ${itemId} revert result:`,
+            result ? "Success" : "Failed");
 
           return {
             success: true,
@@ -484,13 +525,15 @@ class MongoPurchaseRepository extends BasePurchaseRepository {
 
     try {
       // Execute all revert promises and wait for all to complete
-      console.log(`Executing ${revertPromises.length} inventory revert operations`);
+      console.log(`Executing ${revertPromises.length}
+        inventory revert operations`);
       const results = await Promise.all(revertPromises);
 
       const successCount = results.filter((r) => r && r.success).length;
       const failureCount = results.length - successCount;
 
-      console.log(`Inventory revert complete: ${successCount} successes, ${failureCount} failures`);
+      console.log(`Inventory revert complete:
+        ${successCount} successes, ${failureCount} failures`);
 
       return results;
     } catch (error) {
