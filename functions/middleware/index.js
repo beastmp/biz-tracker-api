@@ -23,7 +23,8 @@ const validateRequiredFields = (fields) => {
           }
         }
 
-        if (missingField || value === undefined || value === null || value === "") {
+        if (missingField || value === undefined ||
+          value === null || value === "") {
           return res.status(400).json({
             message: `${field} is required`,
           });

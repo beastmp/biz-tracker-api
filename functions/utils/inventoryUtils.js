@@ -1,14 +1,15 @@
 const {NotFoundError} = require("./errors");
 
 /**
- * Rebuilds inventory quantities, costs and prices based on purchase and sales history
+ * Rebuilds inventory quantities, costs and prices
+ * based on purchase and sales history
  * @param {Object} providers - Provider instances
  * @param {Object} options - Options for rebuilding (batchSize, etc.)
  * @return {Promise<Object>} - Results of the rebuild operation
  */
 async function rebuildInventory(providers, options = {}) {
-  const {itemRepository, purchaseRepository, salesRepository} = providers;
-  const batchSize = options.batchSize || 50; // Process items in batches of 50 by default
+  const {itemRepository} = providers;
+  const batchSize = options.batchSize || 50;
 
   // Get all items
   const items = await itemRepository.findAll();
@@ -40,7 +41,8 @@ async function rebuildInventory(providers, options = {}) {
 
         return result;
       } catch (error) {
-        console.error(`Error rebuilding inventory for item ${item._id}:`, error);
+        console.error(`Error rebuilding inventory
+          for item ${item._id}:`, error);
         results.errors++;
         results.details.push({
           itemId: item._id,
@@ -55,7 +57,8 @@ async function rebuildInventory(providers, options = {}) {
     await Promise.all(batchPromises);
 
     // Log progress to help with debugging timeouts
-    console.log(`Processed ${Math.min(i + batchSize, items.length)} of ${items.length} items`);
+    console.log(`Processed ${Math.min(i + batchSize, items.length)}
+      of ${items.length} items`);
   }
 
   return results;
@@ -102,7 +105,8 @@ async function rebuildItemInventory(itemId, providers) {
 
   // Filter to only include received purchases
   const receivedPurchases = purchases.filter((p) => p.status === "received");
-  console.log(`Found ${receivedPurchases.length} received purchases for item ${itemId}`);
+  console.log(`Found ${receivedPurchases.length}
+    received purchases for item ${itemId}`);
 
   // 2. Get all sales for this item
   const sales = await salesRepository.getAllByItemId(itemId);
@@ -120,12 +124,14 @@ async function rebuildItemInventory(itemId, providers) {
       for (const purchase of receivedPurchases) {
         // Find ALL matching items in this purchase (there could be multiple)
         const matchingItems = purchase.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
         if (matchingItems.length > 0) {
-          console.log(`Found ${matchingItems.length} matching items in purchase ${purchase._id}`);
+          console.log(`Found ${matchingItems.length}
+            matching items in purchase ${purchase._id}`);
           allPurchaseItems = [...allPurchaseItems, ...matchingItems];
         }
       }
@@ -134,13 +140,15 @@ async function rebuildItemInventory(itemId, providers) {
       const purchasedQuantity = allPurchaseItems.reduce((total, item) =>
         total + (item.quantity || 0), 0);
 
-      console.log(`Total purchased quantity for item ${itemId}: ${purchasedQuantity}`);
+      console.log(`Total purchased quantity for item
+        ${itemId}: ${purchasedQuantity}`);
 
       // Collect ALL matching sale items across all sales
       let allSaleItems = [];
       for (const sale of completedSales) {
         const matchingItems = sale.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -154,7 +162,8 @@ async function rebuildItemInventory(itemId, providers) {
         total + (item.quantity || 0), 0);
 
       newQuantity = Math.max(0, purchasedQuantity - soldQuantity);
-      console.log(`Calculated new quantity: ${newQuantity} (purchased: ${purchasedQuantity}, sold: ${soldQuantity})`);
+      console.log(`Calculated new quantity: ${newQuantity}
+        (purchased: ${purchasedQuantity}, sold: ${soldQuantity})`);
 
       // Update if quantity changed
       if (item.quantity !== newQuantity) {
@@ -174,7 +183,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allPurchaseItems = [];
       for (const purchase of receivedPurchases) {
         const matchingItems = purchase.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -189,7 +199,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allSaleItems = [];
       for (const sale of completedSales) {
         const matchingItems = sale.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -223,7 +234,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allPurchaseItems = [];
       for (const purchase of receivedPurchases) {
         const matchingItems = purchase.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -238,7 +250,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allSaleItems = [];
       for (const sale of completedSales) {
         const matchingItems = sale.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -251,7 +264,8 @@ async function rebuildItemInventory(itemId, providers) {
         total + (item.length || 0), 0);
 
       newQuantity = Math.max(0, purchasedLength - soldLength);
-      console.log(`Calculated new length: ${newQuantity} (purchased: ${purchasedLength}, sold: ${soldLength})`);
+      console.log(`Calculated new length: ${newQuantity}
+        (purchased: ${purchasedLength}, sold: ${soldLength})`);
 
       if (item.length !== newQuantity) {
         item.length = newQuantity;
@@ -271,7 +285,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allPurchaseItems = [];
       for (const purchase of receivedPurchases) {
         const matchingItems = purchase.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -286,7 +301,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allSaleItems = [];
       for (const sale of completedSales) {
         const matchingItems = sale.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -299,7 +315,8 @@ async function rebuildItemInventory(itemId, providers) {
         total + (item.area || 0), 0);
 
       newQuantity = Math.max(0, purchasedArea - soldArea);
-      console.log(`Calculated new area: ${newQuantity} (purchased: ${purchasedArea}, sold: ${soldArea})`);
+      console.log(`Calculated new area: ${newQuantity}
+        (purchased: ${purchasedArea}, sold: ${soldArea})`);
 
       if (item.area !== newQuantity) {
         item.area = newQuantity;
@@ -319,7 +336,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allPurchaseItems = [];
       for (const purchase of receivedPurchases) {
         const matchingItems = purchase.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -334,7 +352,8 @@ async function rebuildItemInventory(itemId, providers) {
       let allSaleItems = [];
       for (const sale of completedSales) {
         const matchingItems = sale.items.filter((i) =>
-          (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+          (i.item && typeof i.item === "object" &&
+            i.item._id && i.item._id.toString() === itemId) ||
           (i.item && typeof i.item === "string" && i.item === itemId),
         );
 
@@ -347,7 +366,8 @@ async function rebuildItemInventory(itemId, providers) {
         total + (item.volume || 0), 0);
 
       newQuantity = Math.max(0, purchasedVolume - soldVolume);
-      console.log(`Calculated new volume: ${newQuantity} (purchased: ${purchasedVolume}, sold: ${soldVolume})`);
+      console.log(`Calculated new volume: ${newQuantity}
+        (purchased: ${purchasedVolume}, sold: ${soldVolume})`);
 
       if (item.volume !== newQuantity) {
         item.volume = newQuantity;
@@ -375,12 +395,14 @@ async function rebuildItemInventory(itemId, providers) {
 
     // Find ALL matching items in the purchase (there could be multiple)
     const purchaseItems = latestPurchase.items.filter((i) =>
-      (i.item && typeof i.item === "object" && i.item._id && i.item._id.toString() === itemId) ||
+      (i.item && typeof i.item === "object" && i.item._id &&
+        i.item._id.toString() === itemId) ||
       (i.item && typeof i.item === "string" && i.item === itemId),
     );
 
     if (purchaseItems.length > 0) {
-      console.log(`Found ${purchaseItems.length} matching items in latest purchase ${latestPurchase._id}`);
+      console.log(`Found ${purchaseItems.length} matching items
+        in latest purchase ${latestPurchase._id}`);
 
       // Calculate cost per unit for each matching item
       const itemCosts = purchaseItems.map((purchaseItem) => {
@@ -390,14 +412,16 @@ async function rebuildItemInventory(itemId, providers) {
           // Use the cost per unit directly if available
           costPerUnit = purchaseItem.costPerUnit;
         } else if (purchaseItem.totalCost &&
-                 (purchaseItem.quantity || purchaseItem.weight || purchaseItem.length ||
-                  purchaseItem.area || purchaseItem.volume)) {
+                 (purchaseItem.quantity || purchaseItem.weight ||
+                    purchaseItem.length ||
+                    purchaseItem.area || purchaseItem.volume)) {
           // Calculate cost per unit based on tracking type
-          const divisor = item.trackingType === "quantity" ? purchaseItem.quantity :
-                         item.trackingType === "weight" ? purchaseItem.weight :
-                         item.trackingType === "length" ? purchaseItem.length :
-                         item.trackingType === "area" ? purchaseItem.area :
-                         item.trackingType === "volume" ? purchaseItem.volume : 1;
+          const divisor =
+            item.trackingType === "quantity" ? purchaseItem.quantity :
+            item.trackingType === "weight" ? purchaseItem.weight :
+            item.trackingType === "length" ? purchaseItem.length :
+            item.trackingType === "area" ? purchaseItem.area :
+            item.trackingType === "volume" ? purchaseItem.volume : 1;
 
           if (divisor > 0) {
             costPerUnit = purchaseItem.totalCost / divisor;
@@ -410,7 +434,8 @@ async function rebuildItemInventory(itemId, providers) {
       // Find the maximum cost among all matching items
       if (itemCosts.length > 0) {
         const maxCostPerUnit = Math.max(...itemCosts);
-        console.log(`Calculated costs: [${itemCosts.join(", ")}], using maximum: ${maxCostPerUnit}`);
+        console.log(`Calculated costs: [${itemCosts.join(", ")}],
+          using maximum: ${maxCostPerUnit}`);
 
         // Update cost if we have a valid value and it's changed
         if (item.cost !== maxCostPerUnit) {
@@ -419,7 +444,8 @@ async function rebuildItemInventory(itemId, providers) {
           result.changes.cost = {
             from: originalCost,
             to: maxCostPerUnit,
-            source: `Maximum cost from purchase ${latestPurchase._id} (${new Date(latestPurchase.purchaseDate).toLocaleDateString()})`,
+            source: `Maximum cost from purchase ${latestPurchase._id}
+              (${new Date(latestPurchase.purchaseDate).toLocaleDateString()})`,
             allCosts: itemCosts,
           };
 

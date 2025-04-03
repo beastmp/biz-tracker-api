@@ -1,19 +1,10 @@
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
-const handlerFactory = require("../utils/handlerFactory");
-const {validateRequiredFields} = require("../middleware");
 const {getProviderFactory} = require("../providers");
-const { getPurchaseRepository } = require("../utils/repositoryUtils");
-const { getAssetRepository } = require("../utils/repositoryUtils");
-const { withTransaction } = require("../utils/transactionUtils");
-
-// Create handlers using factory
-const getAllPurchases = handlerFactory.getAll("Purchase");
-// const getPurchase = handlerFactory.getOne("Purchase", "Purchase");
-const createPurchase = handlerFactory.createOne("Purchase");
-const updatePurchase = handlerFactory.updateOne("Purchase", "Purchase");
-const deletePurchase = handlerFactory.deleteOne("Purchase", "Purchase");
+const {getPurchaseRepository} = require("../utils/repositoryUtils");
+const {getAssetRepository} = require("../utils/repositoryUtils");
+const {withTransaction} = require("../utils/transactionUtils");
 
 // Get repository for special operations
 const purchaseRepository = getProviderFactory().getPurchaseRepository();
@@ -32,12 +23,12 @@ router.get("/", async (req, res, next) => {
 // Get single purchase
 router.get("/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const {id} = req.params;
     const purchaseRepository = getPurchaseRepository();
     const purchase = await purchaseRepository.findById(id);
 
     if (!purchase) {
-      return res.status(404).json({ message: "Purchase not found" });
+      return res.status(404).json({message: "Purchase not found"});
     }
 
     res.json(purchase);
@@ -53,10 +44,11 @@ router.post("/", async (req, res, next) => {
     const purchaseRepository = getPurchaseRepository();
 
     // If the status is 'received', we'll want to process any asset items
-    const shouldProcessAssets = purchaseData.status === 'received';
+    const shouldProcessAssets = purchaseData.status === "received";
 
     const newPurchase = await withTransaction(async (transaction) => {
-      const purchase = await purchaseRepository.create(purchaseData, transaction);
+      const purchase =
+        await purchaseRepository.create(purchaseData, transaction);
 
       // If purchase is received and has asset items, create assets
       if (shouldProcessAssets) {
@@ -75,24 +67,26 @@ router.post("/", async (req, res, next) => {
 // Update purchase
 router.patch("/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const {id} = req.params;
     const purchaseData = req.body;
     const purchaseRepository = getPurchaseRepository();
 
     // Check if the purchase is being marked as received
     const purchase = await purchaseRepository.findById(id);
     if (!purchase) {
-      return res.status(404).json({ message: "Purchase not found" });
+      return res.status(404).json({message: "Purchase not found"});
     }
 
     const isNewlyReceived =
-      purchase.status !== 'received' &&
-      purchaseData.status === 'received';
+      purchase.status !== "received" &&
+      purchaseData.status === "received";
 
     const updatedPurchase = await withTransaction(async (transaction) => {
-      const updated = await purchaseRepository.update(id, purchaseData, transaction);
+      const updated =
+        await purchaseRepository.update(id, purchaseData, transaction);
 
-      // If purchase is newly marked as received and has asset items, create assets
+      // If purchase is newly marked as received
+      // and has asset items, create assets
       if (isNewlyReceived) {
         await createAssetsFromPurchase(id, transaction);
       }
@@ -101,7 +95,7 @@ router.patch("/:id", async (req, res, next) => {
     });
 
     if (!updatedPurchase) {
-      return res.status(404).json({ message: "Purchase not found" });
+      return res.status(404).json({message: "Purchase not found"});
     }
 
     res.json(updatedPurchase);
@@ -113,13 +107,13 @@ router.patch("/:id", async (req, res, next) => {
 // Delete purchase
 router.delete("/:id", async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const {id} = req.params;
     const purchaseRepository = getPurchaseRepository();
 
     const result = await purchaseRepository.delete(id);
 
     if (!result) {
-      return res.status(404).json({ message: "Purchase not found" });
+      return res.status(404).json({message: "Purchase not found"});
     }
 
     res.status(204).send();
@@ -173,7 +167,12 @@ router.get("/item/:itemId", async (req, res, next) => {
   }
 });
 
-// Helper function to create assets from purchase items
+/**
+ * Creates asset records for items marked as assets in a purchase
+ * @param {string} purchaseId - The ID of the purchase containing asset items
+ * @param {Object} transaction - The database transaction object
+ * @return {Promise<void>}
+ */
 async function createAssetsFromPurchase(purchaseId, transaction) {
   const purchaseRepository = getPurchaseRepository();
   const assetRepository = getAssetRepository();
@@ -183,23 +182,25 @@ async function createAssetsFromPurchase(purchaseId, transaction) {
   if (!purchase) return;
 
   // Find items marked as assets
-  const assetItems = purchase.items.filter(item => item.isAsset);
+  const assetItems = purchase.items.filter((item) => item.isAsset);
   if (assetItems.length === 0) return;
 
   // Create an asset for each asset item
   for (const [index, item] of assetItems.entries()) {
-    const itemObj = typeof item.item === 'object' ? item.item : { name: `Item ${index + 1}` };
+    const itemObj = typeof item.item === "object" ?
+      item.item :
+      {name: `Item ${index + 1}`};
 
     await assetRepository.create({
-      name: item.assetInfo?.name || itemObj.name,
-      category: item.assetInfo?.category || 'Equipment',
+      name: (item.assetInfo && item.assetInfo.name) || itemObj.name,
+      category: (item.assetInfo && item.assetInfo.category) || "Equipment",
       initialCost: item.totalCost,
       currentValue: item.totalCost,
       purchaseId: purchaseId,
       purchaseDate: purchase.purchaseDate,
-      status: 'active',
-      location: item.assetInfo?.location,
-      assignedTo: item.assetInfo?.assignedTo,
+      status: "active",
+      location: item.assetInfo ? item.assetInfo.location : undefined,
+      assignedTo: item.assetInfo ? item.assetInfo.assignedTo : undefined,
       isInventoryItem: false,
     }, transaction);
   }

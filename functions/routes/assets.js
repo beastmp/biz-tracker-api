@@ -1,7 +1,9 @@
 const express = require("express");
+// eslint-disable-next-line new-cap
 const router = express.Router();
 const {getAssetRepository} = require("../utils/repositoryUtils");
-const {upload, uploadErrorHandler, uploadToStorage} = require("../utils/fileUpload");
+const {upload, uploadErrorHandler, uploadToStorage} =
+  require("../utils/fileUpload");
 const {processFileUpload} = require("../middleware");
 
 // Get all business assets
@@ -69,15 +71,22 @@ router.post("/",
         // Handle maintenance schedule if it exists as a string
         if (typeof req.body.maintenanceSchedule === "string") {
           try {
-            req.body.maintenanceSchedule = JSON.parse(req.body.maintenanceSchedule);
+            req.body.maintenanceSchedule =
+              JSON.parse(req.body.maintenanceSchedule);
           } catch (e) {
             delete req.body.maintenanceSchedule;
           }
         }
 
         // Parse numeric values
-        if (req.body.initialCost) req.body.initialCost = parseFloat(req.body.initialCost);
-        if (req.body.currentValue) req.body.currentValue = parseFloat(req.body.currentValue);
+        if (req.body.initialCost) {
+          req.body.initialCost =
+          parseFloat(req.body.initialCost);
+        }
+        if (req.body.currentValue) {
+          req.body.currentValue =
+          parseFloat(req.body.currentValue);
+        }
 
         const assetRepository = getAssetRepository();
         const newAsset = await assetRepository.create(req.body);
@@ -116,15 +125,22 @@ router.put("/:id",
         // Handle maintenance schedule if it exists as a string
         if (typeof req.body.maintenanceSchedule === "string") {
           try {
-            req.body.maintenanceSchedule = JSON.parse(req.body.maintenanceSchedule);
+            req.body.maintenanceSchedule =
+              JSON.parse(req.body.maintenanceSchedule);
           } catch (e) {
             delete req.body.maintenanceSchedule;
           }
         }
 
         // Parse numeric values
-        if (req.body.initialCost) req.body.initialCost = parseFloat(req.body.initialCost);
-        if (req.body.currentValue) req.body.currentValue = parseFloat(req.body.currentValue);
+        if (req.body.initialCost) {
+          req.body.initialCost =
+          parseFloat(req.body.initialCost);
+        }
+        if (req.body.currentValue) {
+          req.body.currentValue =
+          parseFloat(req.body.currentValue);
+        }
 
         const assetRepository = getAssetRepository();
         const updatedAsset = await assetRepository.update(id, req.body);
@@ -175,7 +191,8 @@ router.post("/from-purchase", async (req, res, next) => {
     const purchaseItem = purchase.items[itemIndex];
     const newAsset = await assetRepository.create({
       ...assetData,
-      name: typeof purchaseItem.item === "object" ? purchaseItem.item.name : assetData.name,
+      name: typeof purchaseItem.item === "object" ?
+        purchaseItem.item.name : assetData.name,
       initialCost: purchaseItem.totalCost,
       currentValue: purchaseItem.totalCost,
       purchaseId: purchaseId,
@@ -200,7 +217,8 @@ router.post("/:id/maintenance", async (req, res, next) => {
     if (!maintenanceData.date || !maintenanceData.description ||
         !maintenanceData.performedBy || maintenanceData.cost === undefined) {
       return res.status(400).json({
-        message: "Required fields missing: date, description, performedBy, cost",
+        message: `Required fields missing:
+          date, description, performedBy, cost`,
       });
     }
 
@@ -208,7 +226,8 @@ router.post("/:id/maintenance", async (req, res, next) => {
     maintenanceData.cost = parseFloat(maintenanceData.cost);
 
     const assetRepository = getAssetRepository();
-    const updatedAsset = await assetRepository.addMaintenanceRecord(id, maintenanceData);
+    const updatedAsset =
+      await assetRepository.addMaintenanceRecord(id, maintenanceData);
 
     if (!updatedAsset) {
       return res.status(404).json({message: "Asset not found"});

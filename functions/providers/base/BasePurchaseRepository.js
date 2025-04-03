@@ -97,8 +97,10 @@ class BasePurchaseRepository extends PurchaseRepository {
 
       // Calculate report statistics
       const totalPurchases = purchases.length;
-      const totalCost = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
-      const averagePurchaseValue = totalPurchases > 0 ? totalCost / totalPurchases : 0;
+      const totalCost = purchases.reduce((sum, purchase) =>
+        sum + purchase.total, 0);
+      const averagePurchaseValue = totalPurchases > 0 ?
+        totalCost / totalPurchases : 0;
 
       return {
         totalPurchases,
@@ -165,7 +167,8 @@ class BasePurchaseRepository extends PurchaseRepository {
         purchase.items.forEach((item) => {
           const measurementType = item.purchasedBy || "quantity";
           trendData[date].measurementBreakdown[measurementType].count += 1;
-          trendData[date].measurementBreakdown[measurementType].total += item.totalCost;
+          trendData[date].measurementBreakdown[measurementType].total +=
+            item.totalCost;
         });
       });
 

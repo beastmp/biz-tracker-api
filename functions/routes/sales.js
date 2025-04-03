@@ -8,14 +8,13 @@ const providers = require("../providers");
 const {withTransaction} = require("../utils/transactionUtils");
 
 // Create handlers using factory
-const getAllSales = handlerFactory.getAll("Sales");
-const getSale = handlerFactory.getOne("Sales", "Sale");
 const createSale = handlerFactory.createOne("Sales");
 const updateSale = handlerFactory.updateOne("Sales", "Sale");
 // const deleteOne = handlerFactory.deleteOne("Sales", "Sale");
 
 // Define a function to get repository (don't call it immediately)
-const getSalesRepository = () => providers.getProviderFactory().getSalesRepository();
+const getSalesRepository = () =>
+  providers.getProviderFactory().getSalesRepository();
 
 // Get all sales
 router.get("/", async (req, res, next) => {
