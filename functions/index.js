@@ -46,6 +46,11 @@ const setupApp = async () => {
     await initializeProviders();
     console.log("✅ All providers initialized successfully");
 
+    app.use((req, res, next) => {
+      console.log(`Incoming request: ${req.method} ${req.originalUrl}`);
+      next();
+    });
+
     // Import routes after provider initialization
     const salesRoutes = require("./routes/sales");
     const purchasesRoutes = require("./routes/purchases");
