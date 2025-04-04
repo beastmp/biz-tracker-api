@@ -22,7 +22,7 @@ jobs:
         run: |
           cd functions
           echo "DB_PROVIDER=mongodb" > .env
-          echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" > .env
+          echo "DB_URI=${{ secrets.MONGODB_URI }}" > .env
           echo "STORAGE_PROVIDER=firebase" >> .env
           echo "STORAGE_BUCKET=${{ secrets.STORAGE_BUCKET }}" >> .env
 
