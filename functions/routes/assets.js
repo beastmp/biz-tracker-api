@@ -1,26 +1,31 @@
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
-const {getAssetRepository} = require("../utils/repositoryUtils");
 const {upload, uploadErrorHandler, uploadToStorage} =
   require("../utils/fileUpload");
+const handlerFactory = require("../utils/handlerFactory");
 const {processFileUpload} = require("../middleware");
+const {getProviderFactory} = require("../providers");
+// const {withTransaction} = require("../utils/transactionUtils");
+const {getAssetRepository} = require("../utils/repositoryUtils");
+const Asset = require("../models/asset"); // Add this import statement
 
-// Get all business assets
-router.get("/", async (req, res, next) => {
-  try {
-    const assetRepository = getAssetRepository();
-    const assets = await assetRepository.findAll();
-    res.json(assets);
-  } catch (err) {
-    next(err);
-  }
-});
+// Create handlers using factory
+const getAllAssets = handlerFactory.getAll("Asset");
+const getAsset = handlerFactory.getOne("Asset", "Asset");
+const createAsset = handlerFactory.createOne("Asset");
+const updateAsset = handlerFactory.updateOne("Asset", "Asset");
+const deleteAsset = handlerFactory.deleteOne("Asset", "Asset");
+
+// Get repository for special operations
+const assetRepository = getProviderFactory().getAssetRepository();
+
+// Get all assets
+router.get("/", getAllAssets);
 
 // Get all categories
 router.get("/categories", async (req, res, next) => {
   try {
-    const assetRepository = getAssetRepository();
     const categories = await assetRepository.getCategories();
     res.json(categories);
   } catch (err) {
@@ -28,150 +33,79 @@ router.get("/categories", async (req, res, next) => {
   }
 });
 
-// Get a single asset by ID
-router.get("/:id", async (req, res, next) => {
+// Get all tags
+router.get("/tags", async (req, res, next) => {
   try {
-    const {id} = req.params;
-    const assetRepository = getAssetRepository();
-    const asset = await assetRepository.findById(id);
-
-    if (!asset) {
-      return res.status(404).json({message: "Asset not found"});
-    }
-
-    res.json(asset);
+    const tags = await assetRepository.getTags();
+    res.json(tags);
   } catch (err) {
     next(err);
   }
 });
 
-// Create a new asset
+// Create new asset
 router.post("/",
     upload.single("image"),
     uploadErrorHandler,
     uploadToStorage,
     processFileUpload,
-    async (req, res, next) => {
-      try {
-        // If there's uploaded image, get URL from the middleware
-        if (req.file && req.file.storageUrl) {
-          req.body.imageUrl = req.file.storageUrl;
-        }
-
-        // Convert tags from JSON string if needed
-        if (typeof req.body.tags === "string") {
-          try {
-            req.body.tags = JSON.parse(req.body.tags);
-          } catch (e) {
-            // If not valid JSON, leave as is or remove
-            delete req.body.tags;
-          }
-        }
-
-        // Handle maintenance schedule if it exists as a string
-        if (typeof req.body.maintenanceSchedule === "string") {
-          try {
-            req.body.maintenanceSchedule =
-              JSON.parse(req.body.maintenanceSchedule);
-          } catch (e) {
-            delete req.body.maintenanceSchedule;
-          }
-        }
-
-        // Parse numeric values
-        if (req.body.initialCost) {
-          req.body.initialCost =
-          parseFloat(req.body.initialCost);
-        }
-        if (req.body.currentValue) {
-          req.body.currentValue =
-          parseFloat(req.body.currentValue);
-        }
-
-        const assetRepository = getAssetRepository();
-        const newAsset = await assetRepository.create(req.body);
-        res.status(201).json(newAsset);
-      } catch (err) {
-        next(err);
-      }
-    },
+    createAsset,
 );
 
-// Update an asset
-router.put("/:id",
+// Get one asset
+router.get("/:id", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const asset = await Asset.findById(id);
+
+    if (!asset) {
+      console.log(`Item ${id} not found`);
+      return res.status(404).json({message: "Asset not found"});
+    }
+
+    return getAsset(req, res, next);
+  } catch (err) {
+    console.error(`Error fetching asset ${req.params.id}:`, err);
+    next(err);
+  }
+});
+
+// Update asset
+router.patch("/:id",
     upload.single("image"),
     uploadErrorHandler,
     uploadToStorage,
     processFileUpload,
+    updateAsset,
+);
+
+// Upload image for an asset
+router.patch("/:id/image",
+    upload.single("image"),
+    uploadErrorHandler,
+    uploadToStorage,
     async (req, res, next) => {
       try {
-        const {id} = req.params;
-
-        // If there's uploaded image, get URL from the middleware
-        if (req.file && req.file.storageUrl) {
-          req.body.imageUrl = req.file.storageUrl;
+        if (!req.file || !req.file.storageUrl) {
+          return res.status(400).json({message: "No image uploaded"});
         }
 
-        // Convert tags from JSON string if needed
-        if (typeof req.body.tags === "string") {
-          try {
-            req.body.tags = JSON.parse(req.body.tags);
-          } catch (e) {
-            // If not valid JSON, leave as is or remove
-            delete req.body.tags;
-          }
+        const item =
+          await assetRepository.updateImage(req.params.id, req.file.storageUrl);
+        if (!item) {
+          return res.status(404).json({message: "Item not found"});
         }
 
-        // Handle maintenance schedule if it exists as a string
-        if (typeof req.body.maintenanceSchedule === "string") {
-          try {
-            req.body.maintenanceSchedule =
-              JSON.parse(req.body.maintenanceSchedule);
-          } catch (e) {
-            delete req.body.maintenanceSchedule;
-          }
-        }
-
-        // Parse numeric values
-        if (req.body.initialCost) {
-          req.body.initialCost =
-          parseFloat(req.body.initialCost);
-        }
-        if (req.body.currentValue) {
-          req.body.currentValue =
-          parseFloat(req.body.currentValue);
-        }
-
-        const assetRepository = getAssetRepository();
-        const updatedAsset = await assetRepository.update(id, req.body);
-
-        if (!updatedAsset) {
-          return res.status(404).json({message: "Asset not found"});
-        }
-
-        res.json(updatedAsset);
+        res.json(item);
       } catch (err) {
         next(err);
       }
     },
 );
 
-// Delete an asset
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const assetRepository = getAssetRepository();
-    const result = await assetRepository.delete(id);
 
-    if (!result) {
-      return res.status(404).json({message: "Asset not found"});
-    }
-
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+// Delete asset
+router.delete("/:id", deleteAsset);
 
 // Add asset from a purchase
 router.post("/from-purchase", async (req, res, next) => {
