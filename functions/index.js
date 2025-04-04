@@ -27,13 +27,6 @@ app.use(express.json());
 //   next();
 // });
 
-// Strip the /api prefix from incoming requests more robustly
-app.use("/api", (req, res, next) => {
-  // Remove only the first instance of /api at the start of the URL
-  req.url = req.url.replace(/^\/api/, "");
-  next();
-});
-
 // Default route
 app.get("/", (req, res) => {
   res.send("Biz-Tracker API is running");
