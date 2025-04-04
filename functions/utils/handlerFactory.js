@@ -21,6 +21,7 @@ const getRepositoryForModel = (modelName) => {
       return providerFactory.getSalesRepository();
     case "purchase":
       return providerFactory.getPurchaseRepository();
+    case "asset":
     case "assets":
       return providerFactory.getAssetRepository();
     default:
