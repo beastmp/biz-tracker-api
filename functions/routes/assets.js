@@ -59,7 +59,7 @@ router.get("/:id", async (req, res, next) => {
     const asset = await Asset.findById(id);
 
     if (!asset) {
-      console.log(`Item ${id} not found`);
+      console.log(`Asset ${id} not found`);
       return res.status(404).json({message: "Asset not found"});
     }
 
@@ -90,13 +90,13 @@ router.patch("/:id/image",
           return res.status(400).json({message: "No image uploaded"});
         }
 
-        const item =
+        const asset =
           await assetRepository.updateImage(req.params.id, req.file.storageUrl);
-        if (!item) {
-          return res.status(404).json({message: "Item not found"});
+        if (!asset) {
+          return res.status(404).json({message: "Asset not found"});
         }
 
-        res.json(item);
+        res.json(asset);
       } catch (err) {
         next(err);
       }
