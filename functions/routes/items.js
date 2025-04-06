@@ -116,29 +116,79 @@ router.patch("/:id",
     updateItem,
 );
 
-// Upload image for an item
-router.patch("/:id/image",
-    upload.single("image"),
-    uploadErrorHandler,
-    uploadToStorage,
-    async (req, res, next) => {
-      try {
-        if (!req.file || !req.file.storageUrl) {
-          return res.status(400).json({message: "No image uploaded"});
-        }
+// // Upload image for an item
+// router.patch("/:id/image",
+//     upload.single("image"),
+//     uploadErrorHandler,
+//     uploadToStorage,
+//     async (req, res, next) => {
+//       try {
+//         if (!req.file || !req.file.storageUrl) {
+//           return res.status(400).json({message: "No image uploaded"});
+//         }
 
-        const item =
-          await itemRepository.updateImage(req.params.id, req.file.storageUrl);
-        if (!item) {
-          return res.status(404).json({message: "Item not found"});
-        }
+//         const item =
+//           await itemRepository.updateImage(req.params.id,
+//  req.file.storageUrl);
+//         if (!item) {
+//           return res.status(404).json({message: "Item not found"});
+//         }
 
-        res.json(item);
-      } catch (err) {
-        next(err);
-      }
-    },
-);
+//         res.json(item);
+//       } catch (err) {
+//         next(err);
+//       }
+//     },
+// );
+
+router.patch("/:id/image", async (req, res) => {
+  try {
+    const {id} = req.params;
+    const {image, filename, contentType} = req.body;
+
+    if (!image || !contentType) {
+      return res.status(400).json({message: "Missing required image data"});
+    }
+
+    // Get the proper provider instances from your factory
+    const providerFactory = getProviderFactory();
+    const storageProvider = providerFactory.getStorageProvider();
+    const itemRepository = providerFactory.getItemRepository();
+
+    console.log("Uploading image for item:", id);
+
+    // Convert base64 back to buffer
+    const buffer = Buffer.from(image, "base64");
+
+    // Generate a unique filename if not provided
+    const fileExt = contentType.split("/")[1] || "jpg";
+    const finalFilename = filename || `item-${id}-${Date.now()}.${fileExt}`;
+
+    // Use the storage provider to save the file
+    const imageUrl = await storageProvider.uploadFile(
+        buffer,
+        finalFilename,
+        contentType,
+    );
+
+    console.log("Image uploaded successfully. URL:", imageUrl);
+
+    // Update the item with the new image URL
+    const updatedItem = await itemRepository.updateImage(id, imageUrl);
+
+    if (!updatedItem) {
+      return res.status(404).json({message: "Item not found"});
+    }
+
+    res.json({imageUrl});
+  } catch (error) {
+    console.error("Error uploading image:", error);
+    res.status(500).json({
+      message: "Failed to upload image",
+      error: error.message,
+    });
+  }
+});
 
 // Delete item
 router.delete("/:id", deleteItem);

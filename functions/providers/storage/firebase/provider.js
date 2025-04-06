@@ -1,51 +1,65 @@
 const {BaseStorageProvider} = require("../../base");
-const {getStorage, ref, uploadBytes,
-  getDownloadURL, deleteObject} = require("firebase/storage");
-const {initializeApp} = require("firebase/app");
+const admin = require("firebase-admin");
 const config = require("../../config");
 const ProviderRegistry = require("../../registry");
 
 /**
- * Firebase Storage Provider implementation
+ * Firebase Storage Provider implementation using Admin SDK
  * @extends BaseStorageProvider
  */
 class FirebaseStorageProvider extends BaseStorageProvider {
   /**
    * Creates an instance of FirebaseStorageProvider.
-   * Initializes the provider with default configuration.
    * @constructor
    */
   constructor() {
     super(config);
     this.name = "firebase";
     this.type = "storage";
-    this.app = null;
-    this.storage = null;
-    this.bucket = config.STORAGE_BUCKET || null;
+    this.bucket = null;
     this.initialized = false;
   }
 
   /**
-   * Initialize the Firebase storage provider
+   * Initialize the Firebase Admin storage provider
    * @param {Object} [config] Configuration options
    * @return {Promise<void>}
    */
   async initialize(config = {}) {
     try {
-      // Initialize Firebase if not already initialized
-      if (!this.app) {
-        const firebaseConfig = {
-          storageBucket: this.bucket || config.STORAGE_BUCKET,
-        };
+      if (!this.initialized) {
+        // Check if running in Firebase Functions environment
+        if (process.env.FIREBASE_CONFIG) {
+          // Use default app if it exists
+          if (!admin.apps.length) {
+            admin.initializeApp();
+          }
+        } else {
+          // Use service account when running locally
+          try {
+            const serviceAccount =
+              require("../../../firebase-credentials.json");
+            if (!admin.apps.length) {
+              admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+                storageBucket: this.bucket || config.STORAGE_BUCKET,
+              });
+            }
+          } catch (error) {
+            console.error("Error loading service account:", error);
+            if (!admin.apps.length) {
+              admin.initializeApp();
+            }
+          }
+        }
 
-        this.app = initializeApp(firebaseConfig);
-        this.storage = getStorage(this.app);
+        this.bucket = admin.storage().bucket();
         this.initialized = true;
-        console.log(`Firebase Storage provider initialized
-          with bucket: ${this.bucket}`);
+        console.log(`Firebase Admin Storage provider initialized with bucket: ${
+          this.bucket.name}`);
       }
     } catch (error) {
-      console.error("Error initializing Firebase Storage:", error);
+      console.error("Error initializing Firebase Admin Storage:", error);
       throw error;
     }
   }
@@ -68,21 +82,33 @@ class FirebaseStorageProvider extends BaseStorageProvider {
       const folderPath = options.folder || "uploads";
       const filePath = `${folderPath}/${safeFileName}`;
 
-      // Create a reference to the file location
-      const fileRef = ref(this.storage, filePath);
+      // Create a file object in the bucket
+      const file = this.bucket.file(filePath);
 
-      // Upload the file
-      const metadata = {
-        contentType: mimeType,
+      // Upload the file with admin privileges
+      const uploadOptions = {
+        metadata: {
+          contentType: mimeType,
+          metadata: {
+            uploadedByAdmin: "true",
+            timestamp: new Date().toISOString(),
+          },
+        },
+        resumable: false,
       };
 
-      await uploadBytes(fileRef, fileBuffer, metadata);
+      await file.save(fileBuffer, uploadOptions);
+
+      // Make the file publicly accessible
+      await file.makePublic();
 
       // Get the public URL
-      const downloadUrl = await getDownloadURL(fileRef);
+      const downloadUrl = `https://storage.googleapis.com/${
+        this.bucket.name}/${filePath}`;
+
       return downloadUrl;
     } catch (error) {
-      console.error("Firebase Storage upload error:", error);
+      console.error("Firebase Admin Storage upload error:", error);
       throw error;
     }
   }
@@ -99,11 +125,13 @@ class FirebaseStorageProvider extends BaseStorageProvider {
 
     try {
       // Extract file path from URL
-      const fileRef = ref(this.storage, this.getPathFromUrl(url));
-      await deleteObject(fileRef);
+      const filePath = this.getPathFromUrl(url);
+      const file = this.bucket.file(filePath);
+
+      await file.delete();
       return true;
     } catch (error) {
-      console.error("Firebase Storage delete error:", error);
+      console.error("Firebase Admin Storage delete error:", error);
       return false;
     }
   }
@@ -119,28 +147,18 @@ class FirebaseStorageProvider extends BaseStorageProvider {
     }
 
     try {
-      const fileRef = ref(this.storage, filePath);
-      return await getDownloadURL(fileRef);
+      const file = this.bucket.file(filePath);
+      const [exists] = await file.exists();
+
+      if (!exists) {
+        throw new Error(`File does not exist: ${filePath}`);
+      }
+
+      return `https://storage.googleapis.com/${this.bucket.name}/${filePath}`;
     } catch (error) {
-      console.error("Firebase Storage getUrl error:", error);
+      console.error("Firebase Admin Storage getUrl error:", error);
       throw error;
     }
-  }
-
-  /**
-   * Check if Firebase Storage is properly configured
-   * @return {boolean} True if configured correctly
-   */
-  isConfigured() {
-    return !!this.bucket;
-  }
-
-  /**
-   * Get provider name
-   * @return {string} Provider name
-   */
-  getProviderName() {
-    return "firebase";
   }
 
   /**
@@ -159,11 +177,35 @@ class FirebaseStorageProvider extends BaseStorageProvider {
         return decodeURIComponent(pathMatch[1]);
       }
 
+      // Check alternative URL format
+      const gcsMatch = url.match(
+          /https:\/\/storage\.googleapis\.com\/([^/]+)\/(.+)/,
+      );
+      if (gcsMatch) {
+        return gcsMatch[2];
+      }
+
       throw new Error("Could not extract path from URL");
     } catch (error) {
       console.error("Error extracting path from URL:", error);
       throw error;
     }
+  }
+
+  /**
+   * Check if Firebase Storage is properly configured
+   * @return {boolean} True if configured correctly
+   */
+  isConfigured() {
+    return !!this.bucket;
+  }
+
+  /**
+   * Get provider name
+   * @return {string} Provider name
+   */
+  getProviderName() {
+    return "firebase";
   }
 }
 

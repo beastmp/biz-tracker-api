@@ -21,6 +21,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// On your server
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // Or your specific origin
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
+
 // // Mock authentication middleware - replace with actual auth in production
 // app.use((req, res, next) => {
 //   req.user = {businessId: "default"};
