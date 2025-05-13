@@ -1,0 +1,49 @@
+### Variables
+@baseUrl = http://localhost:5001/your-project-id/us-central1/api
+@apiVersion = api
+@assetId = replace_with_actual_asset_id
+
+### Get All Assets
+GET {{baseUrl}}/assets
+Content-Type: application/json
+
+### Get Asset by ID
+GET {{baseUrl}}/assets/{{assetId}}
+Content-Type: application/json
+
+### Create New Asset
+POST {{baseUrl}}/assets
+Content-Type: application/json
+
+{
+  "name": "Test Asset",
+  "assetType": "equipment",
+  "purchaseDate": "2025-05-01T12:00:00.000Z",
+  "purchasePrice": 1999.99,
+  "status": "active",
+  "description": "Test asset description",
+  "location": "Main Office",
+  "notes": "Test notes"
+}
+
+### Update Asset
+PATCH {{baseUrl}}/assets/{{assetId}}
+Content-Type: application/json
+
+{
+  "name": "Updated Asset Name",
+  "status": "maintenance",
+  "notes": "Updated test asset notes"
+}
+
+### Delete Asset
+DELETE {{baseUrl}}/assets/{{assetId}}
+Content-Type: application/json
+
+### Get Assets by Type
+GET {{baseUrl}}/assets/type/equipment
+Content-Type: application/json
+
+### Get Assets by Status
+GET {{baseUrl}}/assets/status/active
+Content-Type: application/json

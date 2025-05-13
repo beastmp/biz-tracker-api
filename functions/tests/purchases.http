@@ -1,0 +1,57 @@
+### Variables
+@baseUrl = http://localhost:5001/your-project-id/us-central1/api
+@apiVersion = api
+@purchaseId = replace_with_actual_purchase_id
+
+### Get All Purchases
+GET {{baseUrl}}/purchases
+Content-Type: application/json
+
+### Get Purchase by ID
+GET {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: application/json
+
+### Get Purchase by ID with Populated Items
+GET {{baseUrl}}/purchases/{{purchaseId}}?populate=true
+Content-Type: application/json
+
+### Create New Purchase
+POST {{baseUrl}}/purchases
+Content-Type: application/json
+
+{
+  "supplier": "Test Supplier",
+  "date": "2025-05-13T12:00:00.000Z",
+  "items": [
+    {
+      "item": "replace_with_item_id",
+      "quantity": 5,
+      "cost": 9.99
+    }
+  ],
+  "invoiceNumber": "INV-12345",
+  "paymentMethod": "credit",
+  "notes": "Test purchase transaction"
+}
+
+### Update Purchase
+PATCH {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: application/json
+
+{
+  "supplier": "Updated Supplier Name",
+  "invoiceNumber": "INV-Updated",
+  "notes": "Updated test purchase notes"
+}
+
+### Delete Purchase
+DELETE {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: application/json
+
+### Get Purchases Summary
+GET {{baseUrl}}/purchases/summary
+Content-Type: application/json
+
+### Get Purchases by Date Range
+GET {{baseUrl}}/purchases/range?start=2025-05-01&end=2025-05-31
+Content-Type: application/json

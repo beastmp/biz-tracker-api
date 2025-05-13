@@ -1,0 +1,15 @@
+### Variables
+@baseUrl = http://localhost:5001/your-project-id/us-central1/api
+@apiVersion = api
+
+### Health Check
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+### Environment Info
+GET {{baseUrl}}/health/environment
+Content-Type: application/json
+
+### Database Status Check
+GET {{baseUrl}}/health/database
+Content-Type: application/json

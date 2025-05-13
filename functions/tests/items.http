@@ -1,0 +1,103 @@
+### Variables
+@baseUrl = http://localhost:5001/your-project-id/us-central1/api
+@apiVersion = api
+@itemId = replace_with_actual_item_id
+
+### Get All Items
+GET {{baseUrl}}/items
+Content-Type: application/json
+
+### Get Item by ID
+GET {{baseUrl}}/items/{{itemId}}
+Content-Type: application/json
+
+### Get Item by ID with Populated Relationships
+GET {{baseUrl}}/items/{{itemId}}?populate=true
+Content-Type: application/json
+
+### Get Next Available SKU
+GET {{baseUrl}}/items/nextsku
+Content-Type: application/json
+
+### Get All Categories
+GET {{baseUrl}}/items/categories
+Content-Type: application/json
+
+### Get All Tags
+GET {{baseUrl}}/items/tags
+Content-Type: application/json
+
+### Create New Item
+POST {{baseUrl}}/items
+Content-Type: application/json
+
+{
+  "name": "Test Item",
+  "sku": "TEST001",
+  "description": "Test item description",
+  "category": "Test Category",
+  "tags": ["test", "item"],
+  "price": 19.99,
+  "cost": 9.99,
+  "quantity": 10,
+  "unit": "ea"
+}
+
+### Update Item
+PATCH {{baseUrl}}/items/{{itemId}}
+Content-Type: application/json
+
+{
+  "name": "Updated Test Item",
+  "description": "Updated test item description",
+  "price": 24.99
+}
+
+### Delete Item
+DELETE {{baseUrl}}/items/{{itemId}}
+Content-Type: application/json
+
+### Get Item Relationships
+GET {{baseUrl}}/items/{{itemId}}/relationships
+Content-Type: application/json
+
+### Get Derived Items
+GET {{baseUrl}}/items/{{itemId}}/derived
+Content-Type: application/json
+
+### Get Parent Item
+GET {{baseUrl}}/items/{{itemId}}/parent
+Content-Type: application/json
+
+### Breakdown Item into Derived Items
+POST {{baseUrl}}/items/{{itemId}}/breakdown
+Content-Type: application/json
+
+{
+  "derivedItems": [
+    {
+      "name": "Derived Item 1",
+      "sku": "DERIVED001",
+      "quantity": 5,
+      "unit": "ea"
+    },
+    {
+      "name": "Derived Item 2",
+      "sku": "DERIVED002",
+      "quantity": 5,
+      "unit": "ea"
+    }
+  ]
+}
+
+### Rebuild Item Relationships
+POST {{baseUrl}}/items/utility/rebuild-relationships
+Content-Type: application/json
+
+### Rebuild Inventory
+POST {{baseUrl}}/items/utility/rebuild-inventory
+Content-Type: application/json
+
+### Rebuild Inventory for Specific Item
+POST {{baseUrl}}/items/utility/rebuild-inventory/{{itemId}}
+Content-Type: application/json
