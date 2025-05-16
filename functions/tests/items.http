@@ -1,35 +1,34 @@
-### Variables
-@baseUrl = http://localhost:5001/your-project-id/us-central1/api
-@apiVersion = api
+### Items API Tests
+# @name itemsTests
 @itemId = replace_with_actual_item_id
 
 ### Get All Items
 GET {{baseUrl}}/items
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Item by ID
 GET {{baseUrl}}/items/{{itemId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Item by ID with Populated Relationships
 GET {{baseUrl}}/items/{{itemId}}?populate=true
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Next Available SKU
 GET {{baseUrl}}/items/nextsku
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get All Categories
 GET {{baseUrl}}/items/categories
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get All Tags
 GET {{baseUrl}}/items/tags
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Create New Item
 POST {{baseUrl}}/items
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 {
   "name": "Test Item",
@@ -45,7 +44,7 @@ Content-Type: application/json
 
 ### Update Item
 PATCH {{baseUrl}}/items/{{itemId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 {
   "name": "Updated Test Item",
@@ -55,23 +54,23 @@ Content-Type: application/json
 
 ### Delete Item
 DELETE {{baseUrl}}/items/{{itemId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Item Relationships
 GET {{baseUrl}}/items/{{itemId}}/relationships
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Derived Items
 GET {{baseUrl}}/items/{{itemId}}/derived
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Parent Item
 GET {{baseUrl}}/items/{{itemId}}/parent
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Breakdown Item into Derived Items
 POST {{baseUrl}}/items/{{itemId}}/breakdown
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 {
   "derivedItems": [
@@ -92,12 +91,12 @@ Content-Type: application/json
 
 ### Rebuild Item Relationships
 POST {{baseUrl}}/items/utility/rebuild-relationships
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Rebuild Inventory
 POST {{baseUrl}}/items/utility/rebuild-inventory
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Rebuild Inventory for Specific Item
 POST {{baseUrl}}/items/utility/rebuild-inventory/{{itemId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}

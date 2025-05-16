@@ -1,23 +1,22 @@
-### Variables
-@baseUrl = http://localhost:5001/your-project-id/us-central1/api
-@apiVersion = api
+### Sales API Tests
+# @name salesTests
 @saleId = replace_with_actual_sale_id
 
 ### Get All Sales
 GET {{baseUrl}}/sales
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Sale by ID
 GET {{baseUrl}}/sales/{{saleId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Sale by ID with Populated Items
 GET {{baseUrl}}/sales/{{saleId}}?populate=true
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Create New Sale
 POST {{baseUrl}}/sales
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 {
   "customer": "Test Customer",
@@ -35,7 +34,7 @@ Content-Type: application/json
 
 ### Update Sale
 PATCH {{baseUrl}}/sales/{{saleId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 {
   "customer": "Updated Customer Name",
@@ -44,12 +43,12 @@ Content-Type: application/json
 
 ### Delete Sale
 DELETE {{baseUrl}}/sales/{{saleId}}
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Sales Summary
 GET {{baseUrl}}/sales/summary
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
 
 ### Get Sales by Date Range
 GET {{baseUrl}}/sales/range?start=2025-05-01&end=2025-05-31
-Content-Type: application/json
+Content-Type: {{$shared contentType}}
