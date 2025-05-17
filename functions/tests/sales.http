@@ -1,0 +1,54 @@
+### Sales API Tests
+# @name salesTests
+@saleId = replace_with_actual_sale_id
+
+### Get All Sales
+GET {{baseUrl}}/sales
+Content-Type: {{$shared contentType}}
+
+### Get Sale by ID
+GET {{baseUrl}}/sales/{{saleId}}
+Content-Type: {{$shared contentType}}
+
+### Get Sale by ID with Populated Items
+GET {{baseUrl}}/sales/{{saleId}}?populate=true
+Content-Type: {{$shared contentType}}
+
+### Create New Sale
+POST {{baseUrl}}/sales
+Content-Type: {{$shared contentType}}
+
+{
+  "customer": "Test Customer",
+  "date": "2025-05-13T12:00:00.000Z",
+  "items": [
+    {
+      "item": "replace_with_item_id",
+      "quantity": 2,
+      "price": 19.99
+    }
+  ],
+  "paymentMethod": "cash",
+  "notes": "Test sale transaction"
+}
+
+### Update Sale
+PATCH {{baseUrl}}/sales/{{saleId}}
+Content-Type: {{$shared contentType}}
+
+{
+  "customer": "Updated Customer Name",
+  "notes": "Updated test sale notes"
+}
+
+### Delete Sale
+DELETE {{baseUrl}}/sales/{{saleId}}
+Content-Type: {{$shared contentType}}
+
+### Get Sales Summary
+GET {{baseUrl}}/sales/summary
+Content-Type: {{$shared contentType}}
+
+### Get Sales by Date Range
+GET {{baseUrl}}/sales/range?start=2025-05-01&end=2025-05-31
+Content-Type: {{$shared contentType}}

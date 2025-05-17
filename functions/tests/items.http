@@ -1,0 +1,102 @@
+### Items API Tests
+# @name itemsTests
+@itemId = replace_with_actual_item_id
+
+### Get All Items
+GET {{baseUrl}}/items
+Content-Type: {{$shared contentType}}
+
+### Get Item by ID
+GET {{baseUrl}}/items/{{itemId}}
+Content-Type: {{$shared contentType}}
+
+### Get Item by ID with Populated Relationships
+GET {{baseUrl}}/items/{{itemId}}?populate=true
+Content-Type: {{$shared contentType}}
+
+### Get Next Available SKU
+GET {{baseUrl}}/items/nextsku
+Content-Type: {{$shared contentType}}
+
+### Get All Categories
+GET {{baseUrl}}/items/categories
+Content-Type: {{$shared contentType}}
+
+### Get All Tags
+GET {{baseUrl}}/items/tags
+Content-Type: {{$shared contentType}}
+
+### Create New Item
+POST {{baseUrl}}/items
+Content-Type: {{$shared contentType}}
+
+{
+  "name": "Test Item",
+  "sku": "TEST001",
+  "description": "Test item description",
+  "category": "Test Category",
+  "tags": ["test", "item"],
+  "price": 19.99,
+  "cost": 9.99,
+  "quantity": 10,
+  "unit": "ea"
+}
+
+### Update Item
+PATCH {{baseUrl}}/items/{{itemId}}
+Content-Type: {{$shared contentType}}
+
+{
+  "name": "Updated Test Item",
+  "description": "Updated test item description",
+  "price": 24.99
+}
+
+### Delete Item
+DELETE {{baseUrl}}/items/{{itemId}}
+Content-Type: {{$shared contentType}}
+
+### Get Item Relationships
+GET {{baseUrl}}/items/{{itemId}}/relationships
+Content-Type: {{$shared contentType}}
+
+### Get Derived Items
+GET {{baseUrl}}/items/{{itemId}}/derived
+Content-Type: {{$shared contentType}}
+
+### Get Parent Item
+GET {{baseUrl}}/items/{{itemId}}/parent
+Content-Type: {{$shared contentType}}
+
+### Breakdown Item into Derived Items
+POST {{baseUrl}}/items/{{itemId}}/breakdown
+Content-Type: {{$shared contentType}}
+
+{
+  "derivedItems": [
+    {
+      "name": "Derived Item 1",
+      "sku": "DERIVED001",
+      "quantity": 5,
+      "unit": "ea"
+    },
+    {
+      "name": "Derived Item 2",
+      "sku": "DERIVED002",
+      "quantity": 5,
+      "unit": "ea"
+    }
+  ]
+}
+
+### Rebuild Item Relationships
+POST {{baseUrl}}/items/utility/rebuild-relationships
+Content-Type: {{$shared contentType}}
+
+### Rebuild Inventory
+POST {{baseUrl}}/items/utility/rebuild-inventory
+Content-Type: {{$shared contentType}}
+
+### Rebuild Inventory for Specific Item
+POST {{baseUrl}}/items/utility/rebuild-inventory/{{itemId}}
+Content-Type: {{$shared contentType}}

@@ -1,0 +1,14 @@
+### Health API Tests
+# @name healthTests
+
+### Health Check
+GET {{baseUrl}}/health
+Content-Type: {{$shared contentType}}
+
+### Environment Info
+GET {{baseUrl}}/health/environment
+Content-Type: {{$shared contentType}}
+
+### Database Status Check
+GET {{baseUrl}}/health/database
+Content-Type: {{$shared contentType}}

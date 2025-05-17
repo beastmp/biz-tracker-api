@@ -1,0 +1,56 @@
+### Purchases API Tests
+# @name purchasesTests
+@purchaseId = replace_with_actual_purchase_id
+
+### Get All Purchases
+GET {{baseUrl}}/purchases
+Content-Type: {{$shared contentType}}
+
+### Get Purchase by ID
+GET {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: {{$shared contentType}}
+
+### Get Purchase by ID with Populated Items
+GET {{baseUrl}}/purchases/{{purchaseId}}?populate=true
+Content-Type: {{$shared contentType}}
+
+### Create New Purchase
+POST {{baseUrl}}/purchases
+Content-Type: {{$shared contentType}}
+
+{
+  "supplier": "Test Supplier",
+  "date": "2025-05-13T12:00:00.000Z",
+  "items": [
+    {
+      "item": "replace_with_item_id",
+      "quantity": 5,
+      "cost": 9.99
+    }
+  ],
+  "invoiceNumber": "INV-12345",
+  "paymentMethod": "credit",
+  "notes": "Test purchase transaction"
+}
+
+### Update Purchase
+PATCH {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: {{$shared contentType}}
+
+{
+  "supplier": "Updated Supplier Name",
+  "invoiceNumber": "INV-Updated",
+  "notes": "Updated test purchase notes"
+}
+
+### Delete Purchase
+DELETE {{baseUrl}}/purchases/{{purchaseId}}
+Content-Type: {{$shared contentType}}
+
+### Get Purchases Summary
+GET {{baseUrl}}/purchases/summary
+Content-Type: {{$shared contentType}}
+
+### Get Purchases by Date Range
+GET {{baseUrl}}/purchases/range?start=2025-05-01&end=2025-05-31
+Content-Type: {{$shared contentType}}
