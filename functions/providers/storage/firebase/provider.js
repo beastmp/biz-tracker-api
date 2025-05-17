@@ -1,22 +1,21 @@
-const {BaseStorageProvider} = require("../../base");
 const admin = require("firebase-admin");
-const config = require("../../config");
+// const config = require("../../config");
 const ProviderRegistry = require("../../registry");
 
 /**
  * Firebase Storage Provider implementation using Admin SDK
  * @extends BaseStorageProvider
  */
-class FirebaseStorageProvider extends BaseStorageProvider {
+class FirebaseStorageProvider {
   /**
    * Creates an instance of FirebaseStorageProvider.
-   * @constructor
+   * @param {Object} config Configuration object
    */
-  constructor() {
-    super(config);
+  constructor(config = {}) {
     this.name = "firebase";
     this.type = "storage";
     this.bucket = null;
+    this.config = config;
     this.initialized = false;
   }
 

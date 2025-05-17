@@ -1,4 +1,4 @@
-const ProviderFactory = require("./providerFactory");
+const providerFactory = require("./providerFactory");
 const registerProvidersModule = require("./registerProviders");
 
 // Make sure we correctly extract the function
@@ -9,13 +9,14 @@ let providerFactoryInstance = null;
 
 /**
  * Get the provider factory instance
- * @return {ProviderFactory} Provider factory instance
+ * @return {Object} Provider factory instance
  * @throws {Error} If providers haven't been initialized
  */
 const getProviderFactoryInstance = () => {
   if (!providerFactoryInstance) {
-    throw new Error(`Providers have not been initialized.
-      Call initializeProviders() first`);
+    throw new Error(
+        "Providers have not been initialized. Call initializeProviders() first",
+    );
   }
   return providerFactoryInstance;
 };
@@ -28,9 +29,16 @@ module.exports = {
       // Register all available providers
       registerAllProviders();
 
-      // Create and initialize provider factory
-      providerFactoryInstance = new ProviderFactory();
-      await providerFactoryInstance.initializeProviders();
+      // Use the singleton instance directly
+      providerFactoryInstance = providerFactory;
+
+      // Initialize the provider factory
+      if (providerFactoryInstance.initializeProviders) {
+        await providerFactoryInstance.initializeProviders();
+      } else {
+        // If the method doesn't exist, initialize it
+        await providerFactoryInstance.initialize();
+      }
 
       return providerFactoryInstance;
     } catch (error) {

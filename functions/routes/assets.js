@@ -1,185 +1,173 @@
+/**
+ * Asset Routes Module
+ *
+ * Defines the Express routes for asset management operations including
+ * creating, reading, updating, and deleting assets.
+ *
+ * @module assetRoutes
+ * @requires express
+ * @requires ../utils/fileUpload
+ * @requires ../providers/handlerFactory
+ * @requires ../validation
+ * @requires ../providers
+ * @requires ../utils/transactionUtils
+ */
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const {upload, uploadErrorHandler, uploadToStorage} =
   require("../utils/fileUpload");
-const handlerFactory = require("../utils/handlerFactory");
-const {processFileUpload} = require("../middleware");
+const handlerFactory = require("../providers/handlerFactory");
+const {processFileUpload} = require("../validation");
 const {getProviderFactory} = require("../providers");
-// const {withTransaction} = require("../utils/transactionUtils");
-const {getAssetRepository} = require("../utils/repositoryUtils");
-const Asset = require("../models/asset"); // Add this import statement
 
 // Create handlers using factory
 const getAllAssets = handlerFactory.getAll("Asset");
+const getAllAssetsWithRelationships =
+  handlerFactory.getAllWithRelationships("Asset");
 const getAsset = handlerFactory.getOne("Asset", "Asset");
-const createAsset = handlerFactory.createOne("Asset");
-const updateAsset = handlerFactory.updateOne("Asset", "Asset");
-const deleteAsset = handlerFactory.deleteOne("Asset", "Asset");
+const getAssetWithRelationships = handlerFactory.getOneWithRelationships(
+    "Asset",
+    "Asset",
+);
+const createAssetWithRelationships =
+  handlerFactory.createOneWithRelationships("Asset");
+const updateAssetWithRelationships =
+  handlerFactory.updateOneWithRelationships("Asset", "Asset");
+const deleteAssetWithRelationships =
+  handlerFactory.deleteOneWithRelationships("Asset", "Asset");
 
-// Get repository for special operations
-const assetRepository = getProviderFactory().getAssetRepository();
+/**
+ * Get the repository for asset operations
+ * @return {Object} Asset repository instance
+ */
+const getAssetRepository = () => {
+  return getProviderFactory().createAssetRepository();
+};
 
-// Get all assets
+// Get all assets without relationships (basic endpoint)
 router.get("/", getAllAssets);
 
-// Get all categories
-router.get("/categories", async (req, res, next) => {
-  try {
-    const categories = await assetRepository.getCategories();
-    res.json(categories);
-  } catch (err) {
-    next(err);
-  }
-});
+// Get all assets with relationships
+router.get("/with-relationships", getAllAssetsWithRelationships);
 
-// Get all tags
-router.get("/tags", async (req, res, next) => {
-  try {
-    const tags = await assetRepository.getTags();
-    res.json(tags);
-  } catch (err) {
-    next(err);
-  }
-});
+// Get one asset without relationships (basic endpoint)
+router.get("/:id", getAsset);
 
-// Create new asset
-router.post("/",
+// Get one asset with relationships
+router.get("/:id/with-relationships", getAssetWithRelationships);
+
+// Create asset with relationship handling
+router.post(
+    "/",
     upload.single("image"),
     uploadErrorHandler,
     uploadToStorage,
     processFileUpload,
-    createAsset,
+    createAssetWithRelationships,
 );
 
-// Get one asset
-router.get("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const asset = await Asset.findById(id);
-
-    if (!asset) {
-      console.log(`Asset ${id} not found`);
-      return res.status(404).json({message: "Asset not found"});
-    }
-
-    return getAsset(req, res, next);
-  } catch (err) {
-    console.error(`Error fetching asset ${req.params.id}:`, err);
-    next(err);
-  }
-});
-
-// Update asset
-router.patch("/:id",
+// Update asset with relationship handling
+router.patch(
+    "/:id",
     upload.single("image"),
     uploadErrorHandler,
     uploadToStorage,
     processFileUpload,
-    updateAsset,
+    updateAssetWithRelationships,
 );
 
-// Upload image for an asset
-router.patch("/:id/image",
-    upload.single("image"),
-    uploadErrorHandler,
-    uploadToStorage,
-    async (req, res, next) => {
-      try {
-        if (!req.file || !req.file.storageUrl) {
-          return res.status(400).json({message: "No image uploaded"});
-        }
+// Delete asset with relationship cleanup
+router.delete("/:id", deleteAssetWithRelationships);
 
-        const asset =
-          await assetRepository.updateImage(req.params.id, req.file.storageUrl);
-        if (!asset) {
-          return res.status(404).json({message: "Asset not found"});
-        }
-
-        res.json(asset);
-      } catch (err) {
-        next(err);
-      }
-    },
-);
-
-
-// Delete asset
-router.delete("/:id", deleteAsset);
-
-// Add asset from a purchase
-router.post("/from-purchase", async (req, res, next) => {
-  try {
-    const {purchaseId, itemIndex, assetData} = req.body;
-
-    const purchaseRepository = getAssetRepository().getPurchaseRepository();
-    const assetRepository = getAssetRepository();
-
-    // Get the purchase
-    const purchase = await purchaseRepository.findById(purchaseId);
-    if (!purchase || !purchase.items[itemIndex]) {
-      return res.status(404).json({message: "Purchase or item not found"});
-    }
-
-    // Create the asset from the purchase item
-    const purchaseItem = purchase.items[itemIndex];
-    const newAsset = await assetRepository.create({
-      ...assetData,
-      name: typeof purchaseItem.item === "object" ?
-        purchaseItem.item.name : assetData.name,
-      initialCost: purchaseItem.totalCost,
-      currentValue: purchaseItem.totalCost,
-      purchaseId: purchaseId,
-      purchaseDate: purchase.purchaseDate,
-      status: "active",
-      isInventoryItem: false,
-    });
-
-    res.status(201).json(newAsset);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Add maintenance record to asset
-router.post("/:id/maintenance", async (req, res, next) => {
+/**
+ * Update asset image
+ * PATCH /assets/:id/image
+ */
+router.patch("/:id/image", async (req, res, next) => {
   try {
     const {id} = req.params;
-    const maintenanceData = req.body;
+    const {image, filename, contentType} = req.body;
 
-    // Validate required fields
-    if (!maintenanceData.date || !maintenanceData.description ||
-        !maintenanceData.performedBy || maintenanceData.cost === undefined) {
+    if (!image || !contentType) {
       return res.status(400).json({
-        message: `Required fields missing:
-          date, description, performedBy, cost`,
+        message: "Missing required image data",
       });
     }
 
-    // Ensure cost is a number
-    maintenanceData.cost = parseFloat(maintenanceData.cost);
-
+    // Get the proper provider instances from your factory
+    const providerFactory = getProviderFactory();
+    const storageProvider = providerFactory.getStorageProvider();
     const assetRepository = getAssetRepository();
-    const updatedAsset =
-      await assetRepository.addMaintenanceRecord(id, maintenanceData);
+
+    console.log(`Uploading image for asset: ${id}`);
+
+    // Convert base64 back to buffer
+    const buffer = Buffer.from(image, "base64");
+
+    // Generate a unique filename if not provided
+    const fileExt = contentType.split("/")[1] || "jpg";
+    const finalFilename = filename ||
+      `asset-${id}-${Date.now()}.${fileExt}`;
+
+    // Use the storage provider to save the file
+    const imageUrl = await storageProvider.uploadFile(
+        buffer,
+        finalFilename,
+        contentType,
+    );
+
+    console.log("Image uploaded successfully. URL:", imageUrl);
+
+    // Update the asset with the new image URL
+    const updatedAsset = await assetRepository.update(id, {
+      imageUrl: imageUrl,
+    });
 
     if (!updatedAsset) {
       return res.status(404).json({message: "Asset not found"});
     }
 
-    res.json(updatedAsset);
+    // Get relationships for response using the helper from factory
+    const relationships = await handlerFactory.getRelationshipsForEntity(
+        id,
+        "Asset",
+    );
+
+    res.json({
+      ...updatedAsset,
+      relationships,
+      imageUrl,
+    });
+  } catch (error) {
+    console.error("Error uploading asset image:", error);
+    next(error);
+  }
+});
+
+/**
+ * Get asset report by types
+ * GET /assets/reports/by-type
+ */
+router.get("/reports/by-type", async (req, res, next) => {
+  try {
+    const assetRepository = getAssetRepository();
+    const report = await assetRepository.getReportByType();
+    res.json(report);
   } catch (err) {
     next(err);
   }
 });
 
-// Get assets for a specific purchase
-router.get("/purchase/:purchaseId", async (req, res, next) => {
+/**
+ * Get asset statistics
+ * GET /assets/stats
+ */
+router.get("/stats", async (req, res, next) => {
   try {
-    const {purchaseId} = req.params;
     const assetRepository = getAssetRepository();
-    const assets = await assetRepository.getAssetsByPurchase(purchaseId);
-    res.json(assets);
+    const stats = await assetRepository.getStatistics();
+    res.json(stats);
   } catch (err) {
     next(err);
   }

@@ -1,62 +1,129 @@
 /**
- * Registry for managing database and storage providers.
- * @class
+ * Provider Registry Module
+ *
+ * This module implements a registry pattern for managing different provider
+ * implementations throughout the application. It allows for runtime registration
+ * and retrieval of various provider types (database, storage, monitoring, etc.)
+ * and their specific implementations.
+ *
+ * @module ProviderRegistry
+ */
+
+/**
+ * Internal storage for registered providers, organized by type and name
+ * @private
+ * @type {Object.<string, Object.<string, Object>>}
+ */
+const registry = {
+  database: {},
+  storage: {},
+  monitoring: {},
+  cache: {},
+};
+
+/**
+ * Provider Registry singleton that manages the registration and retrieval
+ * of provider implementations
+ *
+ * @class ProviderRegistry
  */
 class ProviderRegistry {
   /**
-   * Creates an instance of ProviderRegistry.
-   * Initializes empty storage for database and storage providers.
+   * Register a provider implementation in the registry
+   *
+   * @static
+   * @param {string} type - Provider category (database, storage, etc.)
+   * @param {string} name - Unique identifier for the provider implementation
+   * @param {Object} provider - The provider implementation
+   * @throws {Error} If required parameters are missing
+   * @return {void}
    */
-  constructor() {
-    this.providers = {
-      database: {},
-      storage: {},
-    };
-  }
-
-  /**
-   * Register a provider implementation
-   * @param {string} type - Provider type ('database' or 'storage')
-   * @param {string} name - Provider name
-   * @param {Object} providerInstance - Provider instance
-   */
-  register(type, name, providerInstance) {
-    if (!this.providers[type]) {
-      this.providers[type] = {};
+  static register(type, name, provider) {
+    if (!type || !name || !provider) {
+      throw new Error("Type, name, and provider are required for registration");
     }
-    this.providers[type][name] = providerInstance;
-    console.log(`Registered ${type} provider: ${name}`);
-  }
 
-  /**
-   * Get a provider by type and name
-   * @param {string} type - Provider type
-   * @param {string} name - Provider name
-   * @return {Object|null} Provider instance or null
-   */
-  getProvider(type, name) {
-    if (!this.providers[type] || !this.providers[type][name]) {
-      console.warn(`Provider not found: ${type}/${name}`);
-      return null;
+    if (!registry[type]) {
+      registry[type] = {};
     }
-    return this.providers[type][name];
+
+    registry[type][name] = provider;
+    console.log(`Provider '${name}' registered for type '${type}'`);
   }
 
   /**
-   * List all registered providers
-   * @return {Object} Registered providers by type
+   * Retrieve a specific provider implementation by type and name
+   *
+   * @static
+   * @param {string} type - Provider category to look in
+   * @param {string} name - Name of the provider to retrieve
+   * @throws {Error} If required parameters are missing
+   * @return {Object|null} The provider implementation or null if not found
    */
-  listProviders() {
+  static getProvider(type, name) {
+    if (!type || !name) {
+      throw new Error("Type and name are required to get a provider");
+    }
+
+    return (registry[type] && registry[type][name]) || null;
+  }
+
+  /**
+   * Get all provider implementations of a specific type
+   *
+   * @static
+   * @param {string} type - Provider category to retrieve
+   * @throws {Error} If type parameter is missing
+   * @return {Object.<string, Object>} Object mapping provider names to implementations
+   */
+  static getProviders(type) {
+    if (!type) {
+      throw new Error("Type is required to get providers");
+    }
+
+    return registry[type] || {};
+  }
+
+  /**
+   * Get a summary of all registered providers organized by type
+   *
+   * @static
+   * @return {Object.<string, string[]>} Object mapping provider types to arrays
+   * of provider names
+   */
+  static getAllProviders() {
     const result = {};
 
-    for (const [type, providers] of Object.entries(this.providers)) {
-      result[type] = Object.keys(providers);
-    }
+    Object.keys(registry).forEach((type) => {
+      result[type] = Object.keys(registry[type]);
+    });
 
     return result;
   }
+
+  /**
+   * Check if a specific provider is registered
+   *
+   * @static
+   * @param {string} type - Provider category to check
+   * @param {string} name - Name of the provider to check for
+   * @return {boolean} True if the provider is registered, false otherwise
+   */
+  /**
+   * Check if a specific provider is registered
+   *
+   * @static
+   * @param {string} type - Provider category to check
+   * @param {string} name - Name of the provider to check for
+   * @return {boolean} True if the provider is registered, false otherwise
+   */
+  static isRegistered(type, name) {
+    if (!type || !name) {
+      return false;
+    }
+
+    return !!(registry[type] && registry[type][name]);
+  }
 }
 
-// Create and export a singleton instance
-const registry = new ProviderRegistry();
-module.exports = registry;
+module.exports = ProviderRegistry;

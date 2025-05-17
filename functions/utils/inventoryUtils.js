@@ -1,11 +1,46 @@
-const {NotFoundError} = require("./errors");
+/**
+ * Inventory Utilities Module
+ *
+ * This module provides functions for recalculating and rebuilding inventory
+ * quantities, costs, and other tracking metrics based on purchase and sales
+ * history. It enables correcting inventory discrepancies and ensuring
+ * accurate records.
+ *
+ * @module inventoryUtils
+ * @requires ./errors
+ */
+const {NotFoundError} = require("../validation/errors");
 
 /**
- * Rebuilds inventory quantities, costs and prices
- * based on purchase and sales history
- * @param {Object} providers - Provider instances
- * @param {Object} options - Options for rebuilding (batchSize, etc.)
- * @return {Promise<Object>} - Results of the rebuild operation
+ * Rebuilds inventory quantities, costs and prices for all items based on
+ * their purchase and sales history. This function handles all tracking types
+ * (quantity, weight, length, area, volume) and processes items in batches
+ * to avoid timeouts.
+ *
+ * @async
+ * @param {Object} providers - Repository providers needed for the operation
+ * @param {Object} providers.itemRepository - Item repository instance
+ * @param {Object} providers.purchaseRepository - Purchase repository instance
+ * @param {Object} providers.salesRepository - Sales repository instance
+ * @param {Object} [options={}] - Options to control the rebuild process
+ * @param {number} [options.batchSize=50] - Number of items to process in each batch
+ * @return {Promise<Object>} Results of the rebuild operation including counts
+ *                          of processed, updated and error items
+ *
+ * @example
+ * // Rebuild inventory for all items
+ * const results = await rebuildInventory({
+ *   itemRepository,
+ *   purchaseRepository,
+ *   salesRepository
+ * }, { batchSize: 100 });
+ *
+ * // results = {
+ * //   processed: 250,   // total items processed
+ * //   updated: 72,      // items that needed updates
+ * //   errors: 3,        // items that encountered errors
+ * //   details: [...]    // details for each updated/error item
+ * // }
  */
 async function rebuildInventory(providers, options = {}) {
   const {itemRepository} = providers;
@@ -65,10 +100,49 @@ async function rebuildInventory(providers, options = {}) {
 }
 
 /**
- * Rebuild inventory for a specific item
- * @param {string} itemId - ID of the item to rebuild
- * @param {Object} providers - Provider instances
- * @return {Promise<Object>} - Results of the rebuild operation
+ * Rebuilds inventory data for a specific item based on its purchase and sales history
+ *
+ * This function calculates the accurate quantity, cost, and price for an item by
+ * analyzing all purchases where the item was received and all sales where the item
+ * was sold. It handles all tracking types (quantity, weight, length, area, volume)
+ * and updates the item only if changes are needed.
+ *
+ * @async
+ * @param {string} itemId - ID of the item to rebuild inventory for
+ * @param {Object} providers - Repository providers needed for the operation
+ * @param {Object} providers.itemRepository - Item repository instance
+ * @param {Object} providers.purchaseRepository - Purchase repository instance
+ * @param {Object} providers.salesRepository - Sales repository instance
+ * @throws {NotFoundError} When the specified item ID doesn't exist
+ * @return {Promise<Object>} Results of the rebuild operation for this item
+ *
+ * @example
+ * // Rebuild inventory for a specific item
+ * const result = await rebuildItemInventory("item123", {
+ *   itemRepository,
+ *   purchaseRepository,
+ *   salesRepository
+ * });
+ *
+ * // result = {
+ * //   itemId: "item123",
+ * //   name: "Raw Material X",
+ * //   sku: "RM-X-001",
+ * //   updated: true,
+ * //   changes: {
+ * //     quantity: {
+ * //       from: 10,
+ * //       to: 15,
+ * //       purchasedQuantity: 25,
+ * //       soldQuantity: 10
+ * //     },
+ * //     cost: {
+ * //       from: 12.50,
+ * //       to: 13.75,
+ * //       source: "Maximum cost from purchase abc123..."
+ * //     }
+ * //   }
+ * // }
  */
 async function rebuildItemInventory(itemId, providers) {
   const {itemRepository, purchaseRepository, salesRepository} = providers;

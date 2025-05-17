@@ -1,14 +1,26 @@
 /**
- * Handles provider registration with the registry
+ * Provider Registration Module
+ *
+ * This module handles the dynamic discovery and registration of various provider
+ * implementations in the application. It scans directories to find provider
+ * modules and registers them with the ProviderRegistry.
+ *
+ * @module registerProviders
+ * @requires fs
+ * @requires path
+ * @requires ./registry
  */
 const fs = require("fs");
 const path = require("path");
 const ProviderRegistry = require("./registry");
 
 /**
- * Dynamically loads all providers from a directory and its subdirectories
- * @param {string} dir Directory to scan for providers
- * @param {boolean} isRoot Whether this is the root directory call
+ * Recursively loads and registers provider modules from a directory structure
+ *
+ * @param {string} dir - Directory path relative to the module's location or
+ *                      absolute path if isRoot is false
+ * @param {boolean} [isRoot=true] - Whether this is the root call or a recursive call
+ * @return {void}
  */
 const loadProvidersFromDirectory = (dir, isRoot = true) => {
   const fullPath = isRoot ? path.join(__dirname, dir) : dir;
@@ -67,7 +79,10 @@ const loadProvidersFromDirectory = (dir, isRoot = true) => {
 };
 
 /**
- * Register all available providers with the registry
+ * Initializes the provider system by discovering and registering all available
+ * provider implementations. This should be called during application startup.
+ *
+ * @return {void}
  */
 const registerAllProviders = () => {
   console.log("Registering providers...");
@@ -77,7 +92,8 @@ const registerAllProviders = () => {
   loadProvidersFromDirectory("storage");
 
   console.log("All providers registered successfully");
-  console.log("Available providers:", ProviderRegistry.listProviders());
+  const allProviders = ProviderRegistry.getAllProviders();
+  console.log("Available providers:", allProviders);
 };
 
 module.exports = {

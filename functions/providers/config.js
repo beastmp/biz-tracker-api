@@ -1,10 +1,20 @@
 /**
- * Configuration for providers
- * Centralizes all configuration values and validates required ones
+ * Provider Configuration Module
+ *
+ * This module centralizes all configuration settings for database and storage
+ * providers. It validates required environment variables, provides sensible
+ * defaults for optional settings, and exports a unified configuration object.
+ *
+ * @module config
+ * @requires dotenv
  */
 require("dotenv").config();
 
-// Required environment variables
+/**
+ * List of environment variables that must be defined for the application
+ * to function correctly
+ * @type {string[]}
+ */
 const requiredVars = [
   "DB_URI",
   "DB_PROVIDER",
@@ -12,7 +22,10 @@ const requiredVars = [
   "STORAGE_BUCKET",
 ];
 
-// Default values for optional configuration
+/**
+ * Default configuration values for optional settings
+ * @type {Object}
+ */
 const defaultConfig = {
   DB_PROVIDER: "mongodb",
   STORAGE_PROVIDER: "firebase",
@@ -31,7 +44,11 @@ if (missingVars.length > 0) {
   process.exit(1);
 }
 
-// Create configuration object with fallbacks to defaults
+/**
+ * Complete application configuration with values from environment variables
+ * and defaults for missing optional values
+ * @type {Object}
+ */
 const config = {
   // Database configuration
   DB_URI: process.env.DB_URI,

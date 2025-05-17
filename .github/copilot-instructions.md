@@ -1,4 +1,6 @@
-Always split lines that will be longer than 80 characters.
+Always add JSDoc comments
+
+Always split lines that will be longer than 120 characters.
 
 Always use double-quotes for short strings.
 

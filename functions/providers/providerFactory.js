@@ -1,281 +1,345 @@
+/**
+ * Provider Factory Module
+ *
+ * This module implements a factory pattern for creating and managing provider
+ * instances and repositories. It centralizes the creation of database providers
+ * and their repositories, handling dependencies between them.
+ *
+ * @module ProviderFactory
+ * @requires ./config
+ * @requires ./registry
+ * @requires ./operationsFactory
+ */
 const config = require("./config");
-const registry = require("./registry");
-const {AppError} = require("../utils/errors");
+const ProviderRegistry = require("./registry");
 
 /**
- * Factory class for managing and initializing
- * different providers and repositories
- * @class
+ * Factory class for creating and managing provider instances and repositories
+ *
+ * @class ProviderFactory
  */
 class ProviderFactory {
   /**
-   * Creates an instance of ProviderFactory with empty provider instances
+   * Creates a new ProviderFactory instance
+   *
    * @constructor
    */
   constructor() {
-    this.instances = {
-      database: null,
-      storage: null,
-      repositories: {
-        item: null,
-        sales: null,
-        purchase: null,
-        asset: null,
-      },
-      transactionProvider: null,
+    this.config = config;
+    this.registry = ProviderRegistry;
+    this.activeProviders = {};
+    this.repositories = {};
+
+    // Structure the configuration properly for easier access
+    this.config.database = {
+      uri: this.config.DB_URI,
+      provider: this.config.DB_PROVIDER,
+    };
+
+    this.config.storage = {
+      provider: this.config.STORAGE_PROVIDER,
+      bucket: this.config.STORAGE_BUCKET,
     };
   }
 
   /**
-   * Initialize all configured providers
-   * @return {Promise<ProviderFactory>} This provider factory instance
+   * Initializes the factory with optional custom configuration
+   *
+   * @param {Object} [customConfig=null] - Custom configuration to override defaults
+   * @return {ProviderFactory} This factory instance for method chaining
    */
-  async initializeProviders() {
-    try {
-      // Initialize database provider
-      await this.initializeDatabaseProvider();
-
-      // Initialize storage provider
-      await this.initializeStorageProvider();
-
-      // Initialize repositories
-      this.initializeRepositories();
-
-      console.log("All providers and repositories initialized successfully");
-      return this;
-    } catch (error) {
-      console.error("Failed to initialize providers:", error);
-      throw new AppError(`Provider initialization failed:
-        ${error.message}`, 500);
+  initialize(customConfig = null) {
+    if (customConfig) {
+      this.config = {...this.config, ...customConfig};
     }
+    return this;
   }
 
   /**
-   * Initialize the database provider
-   * @private
+   * Initializes all providers
+   *
+   * @async
+   * @param {Object} [customConfig=null] - Optional custom configuration
+   * @return {Promise<ProviderFactory>} This factory instance
    */
-  async initializeDatabaseProvider() {
-    const dbProviderName = config.DB_PROVIDER;
-    const dbProvider = registry.getProvider("database", dbProviderName);
+  async initializeProviders(customConfig = null) {
+    // Initialize the factory configuration
+    this.initialize(customConfig);
 
-    if (!dbProvider) {
-      throw new AppError(`Database provider '${dbProviderName}'
-        not found. Make sure it's registered correctly.`, 500);
-    }
+    // Initialize the default database provider
+    const dbProviderId = (this.config.database && this.config.database.provider) || "mongodb";
+    const dbProvider = this.getProvider("database", dbProviderId);
 
-    try {
-      // The provider is already an instance, no need to instantiate it
-      this.instances.database = dbProvider;
-      await this.instances.database.connect();
-      console.log(`Database provider '${dbProviderName}'
-        initialized successfully`);
+    // If the provider has an initialize method, call it
+    if (dbProvider && typeof dbProvider.initialize === "function") {
+      console.log(`🔄 Initializing database provider: ${dbProviderId}...`);
+      await dbProvider.initialize(this.config.database);
+      console.log(`✅ Database provider ${dbProviderId} initialized successfully`);
+    } else {
+      console.warn(`⚠️ Database provider ${dbProviderId} has no initialize method`);
 
-      // Initialize transaction provider
-      this.instances.transactionProvider =
-        this.instances.database.createTransactionProvider();
-    } catch (error) {
-      throw new AppError(`Failed to initialize database provider
-        '${dbProviderName}': ${error.message}`, 500);
-    }
-  }
-
-  /**
-   * Initialize the storage provider
-   * @private
-   */
-  async initializeStorageProvider() {
-    const storageProviderName = config.STORAGE_PROVIDER;
-    const storageProvider =
-      registry.getProvider("storage", storageProviderName);
-
-    if (!storageProvider) {
-      throw new AppError(`Storage provider '${storageProviderName}'
-        not found. Make sure it's registered correctly.`, 500);
-    }
-
-    try {
-      // The provider is already an instance, no need to instantiate it
-      this.instances.storage = storageProvider;
-      await this.instances.storage.initialize();
-      console.log(`Storage provider '${storageProviderName}'
-        initialized successfully`);
-
-      if (!this.instances.storage.isConfigured()) {
-        console.warn(`⚠️ Storage provider '${storageProviderName}'
-          is not fully configured`);
-      }
-    } catch (error) {
-      throw new AppError(`Failed to initialize storage provider
-        '${storageProviderName}': ${error.message}`, 500);
-    }
-  }
-
-  /**
-   * Initialize all repositories
-   * @private
-   */
-  initializeRepositories() {
-    try {
-      // Initialize repositories
-      this.instances.repositories.item =
-        this.instances.database.createItemRepository();
-      this.instances.repositories.sales =
-        this.instances.database.createSalesRepository();
-      this.instances.repositories.purchase =
-        this.instances.database.createPurchaseRepository();
-      this.instances.repositories.asset =
-        this.instances.database.createAssetRepository();
-
-      // Set up cross-repository references
-      this.linkRepositories();
-
-      console.log("All repositories initialized successfully");
-    } catch (error) {
-      throw new AppError(`Failed to initialize repositories:
-        ${error.message}`, 500);
-    }
-  }
-
-  /**
-   * Replace a repository with a custom implementation
-   * Useful for testing and mocking
-   * @param {string} repositoryType Repository type ('item','sales','purchase')
-   * @param {Object} customImplementation Custom repository implementation
-   */
-  setCustomRepository(repositoryType, customImplementation) {
-    if (!this.instances.repositories[repositoryType]) {
-      throw new Error(`Repository type '${repositoryType}' not found`);
-    }
-
-    console.log(`Replacing ${repositoryType}
-      repository with custom implementation`);
-    this.instances.repositories[repositoryType] = customImplementation;
-
-    // Re-link dependencies if needed
-    this.linkRepositories();
-  }
-
-  /**
-   * Link repositories to each other (for dependencies)
-   * @private
-   */
-  linkRepositories() {
-    // Link sales and purchase repositories to item repository
-    if (this.instances.repositories.sales &&
-        this.instances.repositories.item) {
-      if (this.instances.repositories.sales.setItemRepository) {
-        this.instances.repositories.sales.
-            setItemRepository(this.instances.repositories.item);
-      } else {
-        this.instances.repositories.sales.itemRepository =
-          this.instances.repositories.item;
+      // Try to connect directly if there's a connect method
+      if (dbProvider && typeof dbProvider.connect === "function") {
+        console.log(`🔄 Connecting to database using provider: ${dbProviderId}...`);
+        await dbProvider.connect();
+        console.log(`✅ Database connection established using ${dbProviderId}`);
       }
     }
 
-    if (this.instances.repositories.purchase &&
-        this.instances.repositories.item) {
-      if (this.instances.repositories.purchase.setItemRepository) {
-        this.instances.repositories.purchase.
-            setItemRepository(this.instances.repositories.item);
-      } else {
-        this.instances.repositories.purchase.itemRepository =
-          this.instances.repositories.item;
-      }
-    }
+    return this;
   }
 
   /**
-   * Get the database provider
-   * @return {Object} Database provider instance
+   * Retrieves a provider instance by type and ID, creating it if necessary
+   *
+   * @param {string} type - Provider category (e.g., 'database', 'storage')
+   * @param {string} id - Provider identifier (e.g., 'mongodb', 'postgres')
+   * @throws {Error} When the requested provider is not registered
+   * @return {Object} The provider instance
    */
-  getDatabaseProvider() {
-    if (!this.instances.database) {
-      throw new Error("Database provider has not been initialized");
+  getProvider(type, id) {
+    const key = `${type}-${id}`;
+
+    // Check if we already have an active provider instance
+    if (this.activeProviders[key]) {
+      return this.activeProviders[key];
     }
-    return this.instances.database;
+
+    // Get the provider from registry
+    const provider = this.registry.getProvider(type, id);
+    if (!provider) {
+      throw new Error(`Provider ${id} of type ${type} not found in registry`);
+    }
+
+    // Cache the provider instance
+    this.activeProviders[key] = provider;
+
+    return provider;
   }
 
   /**
-   * Get the storage provider
-   * @return {Object} Storage provider instance
+   * Gets the configured database provider or a specified alternative
+   *
+   * @param {string} [id=null] - Optional database provider ID to override config
+   * @return {Object} The database provider instance
    */
-  getStorageProvider() {
-    if (!this.instances.storage) {
-      throw new Error("Storage provider has not been initialized");
-    }
-    return this.instances.storage;
+  getDatabaseProvider(id = null) {
+    // Use configured provider ID if not specified
+    const providerId = id || this.config.database.provider || "mongodb";
+    return this.getProvider("database", providerId);
   }
 
   /**
-   * Get the transaction provider
-   * @return {Object} Transaction provider instance
-   */
-  getTransactionProvider() {
-    if (!this.instances.transactionProvider) {
-      throw new Error("Transaction provider has not been initialized");
-    }
-    return this.instances.transactionProvider;
-  }
-
-  /**
-   * Get the item repository
+   * Creates an item repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
    * @return {Object} Item repository instance
    */
-  getItemRepository() {
-    if (!this.instances.repositories.item) {
-      throw new Error("Item repository has not been initialized");
+  createItemRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `item-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
     }
-    return this.instances.repositories.item;
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    const itemRepository = dbProvider.createItemRepository(options);
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = itemRepository;
+
+    return itemRepository;
   }
 
   /**
-   * Get the sales repository
-   * @return {Object} Sales repository instance
+   * Creates a relationship repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} Relationship repository instance
    */
-  getSalesRepository() {
-    if (!this.instances.repositories.sales) {
-      throw new Error("Sales repository has not been initialized");
+  createRelationshipRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `relationship-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
     }
-    return this.instances.repositories.sales;
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository
+    const relationshipRepository = dbProvider.createRelationshipRepository(options);
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = relationshipRepository;
+
+    return relationshipRepository;
   }
 
   /**
-   * Get the purchase repository
-   * @return {Object} Purchase repository instance
-   */
-  getPurchaseRepository() {
-    if (!this.instances.repositories.purchase) {
-      throw new Error("Purchase repository has not been initialized");
-    }
-    return this.instances.repositories.purchase;
-  }
-
-  /**
-   * Get the asset repository
+   * Creates an asset repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
    * @return {Object} Asset repository instance
    */
-  getAssetRepository() {
-    if (!this.instances.repositories.asset) {
-      throw new Error("Asset repository has not been initialized");
+  createAssetRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `asset-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
     }
-    return this.instances.repositories.asset;
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository
+    const assetRepository = dbProvider.createAssetRepository(options);
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = assetRepository;
+
+    return assetRepository;
   }
 
   /**
-   * Shutdown all providers gracefully
-   * @return {Promise<void>}
+   * Creates a sale repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} Sale repository instance
    */
-  async shutdown() {
-    try {
-      if (this.instances.database) {
-        await this.instances.database.disconnect();
-      }
-      console.log("All providers shut down successfully");
-    } catch (error) {
-      console.error("Error shutting down providers:", error);
-      throw error;
+  createSaleRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `sale-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
     }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository
+    const saleRepository = dbProvider.createSaleRepository(options);
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = saleRepository;
+
+    return saleRepository;
+  }
+
+  /**
+   * Creates a purchase repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} Purchase repository instance
+   */
+  createPurchaseRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `purchase-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository
+    const purchaseRepository = dbProvider.createPurchaseRepository(options);
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = purchaseRepository;
+
+    return purchaseRepository;
+  }
+
+  /**
+   * Creates a complete business layer with all repositories and their dependencies
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repositories
+   * @return {Object} Object containing all repository instances
+   */
+  createBusinessLayer(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+
+    // Create repositories
+    const itemRepository = this.createItemRepository(providerId, options);
+    const relationshipRepository = this.createRelationshipRepository(
+        providerId,
+        options,
+    );
+    const assetRepository = this.createAssetRepository(providerId, options);
+    const saleRepository = this.createSaleRepository(providerId, options);
+    const purchaseRepository = this.createPurchaseRepository(providerId, options);
+
+    // Inject dependencies between repositories
+    itemRepository.setRelationshipRepository(relationshipRepository);
+
+    if (saleRepository.setItemRepository) {
+      saleRepository.setItemRepository(itemRepository);
+    }
+
+    if (saleRepository.setRelationshipRepository) {
+      saleRepository.setRelationshipRepository(relationshipRepository);
+    }
+
+    if (purchaseRepository.setItemRepository) {
+      purchaseRepository.setItemRepository(itemRepository);
+    }
+
+    if (purchaseRepository.setRelationshipRepository) {
+      purchaseRepository.setRelationshipRepository(relationshipRepository);
+    }
+
+    // Return the complete business layer
+    return {
+      item: itemRepository,
+      relationship: relationshipRepository,
+      asset: assetRepository,
+      sale: saleRepository,
+      purchase: purchaseRepository,
+    };
+  }
+
+  /**
+   * Clears cached providers and repositories
+   *
+   * @return {void}
+   */
+  clearCache() {
+    this.activeProviders = {};
+    this.repositories = {};
   }
 }
 
-module.exports = ProviderFactory;
+// Export singleton instance
+module.exports = new ProviderFactory();

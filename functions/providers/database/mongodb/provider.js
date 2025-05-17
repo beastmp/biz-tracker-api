@@ -1,24 +1,61 @@
-const {BaseDatabaseProvider} = require("../../base");
+const mongoose = require("mongoose");
 const {connectToMongo, checkConnectionHealth} = require("./connection");
-const MongoItemRepository = require("./itemRepository");
-const MongoSalesRepository = require("./salesRepository");
-const MongoPurchaseRepository = require("./purchaseRepository");
+const MongoDBItemRepository = require("./itemRepository");
+const MongoDBSaleRepository = require("./saleRepository");
+const MongoDBPurchaseRepository = require("./purchaseRepository");
 const MongoTransactionProvider = require("./transactionProvider");
-const MongoAssetRepository = require("./assetRepository");
+const MongoDBAssetRepository = require("./assetRepository");
+const MongoDBRelationshipRepository = require("./relationshipRepository");
 const ProviderRegistry = require("../../registry");
 
 /**
- * MongoDB implementation of DatabaseProvider
+ * MongoDB implementation of DatabaseProvider using composition pattern
  */
-class MongoDBProvider extends BaseDatabaseProvider {
+class MongoDBProvider {
   /**
    * Creates a new instance of MongoDBProvider
+   * @param {Object} config Configuration object
    */
-  constructor() {
-    super({}); // Pass empty config object for now
+  constructor(config = {}) {
     this.name = "mongodb";
     this.type = "database";
-    this.supportedRepositories = ["item", "sales", "purchase", "asset"];
+    this.isConnected = false;
+    this.config = config;
+    this.supportedRepositories = [
+      "item",
+      "sales",
+      "purchase",
+      "asset",
+      "relationship",
+    ];
+
+    // Store repository instances for reuse
+    this.repositories = {};
+  }
+
+  /**
+   * Initialize provider with configuration and establish connection
+   *
+   * @param {Object} config - Configuration object
+   * @return {Promise<MongoDBProvider>} This provider instance for chaining
+   */
+  async initialize(config = {}) {
+    try {
+      // Merge config with existing
+      if (config) {
+        this.config = {...this.config, ...config};
+      }
+
+      // Explicitly establish MongoDB connection
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      return this;
+    } catch (error) {
+      console.error("❌ MongoDB provider initialization failed:", error);
+      throw error;
+    }
   }
 
   /**
@@ -43,7 +80,6 @@ class MongoDBProvider extends BaseDatabaseProvider {
    */
   async disconnect() {
     try {
-      const mongoose = require("mongoose");
       if (mongoose.connection.readyState !== 0) {
         await mongoose.connection.close();
         this.isConnected = false;
@@ -65,26 +101,86 @@ class MongoDBProvider extends BaseDatabaseProvider {
 
   /**
    * Create an item repository
-   * @return {MongoItemRepository} MongoDB item repository implementation
+   * @return {MongoDBItemRepository} MongoDB item repository implementation
    */
   createItemRepository() {
-    return new MongoItemRepository();
+    if (!this.repositories.item) {
+      this.repositories.item = new MongoDBItemRepository(this.config);
+
+      // Set dependencies if available
+      if (this.repositories.relationship) {
+        this.repositories.item.setRelationshipRepository(
+            this.repositories.relationship,
+        );
+      }
+
+      // Set transaction provider if needed
+      const transactionProvider = this.createTransactionProvider();
+      this.repositories.item.setTransactionProvider(transactionProvider);
+    }
+    return this.repositories.item;
   }
 
   /**
    * Create a sales repository
-   * @return {MongoSalesRepository} MongoDB sales repository implementation
+   * @return {MongoDBSaleRepository} MongoDB sales repository implementation
    */
   createSalesRepository() {
-    return new MongoSalesRepository();
+    if (!this.repositories.sales) {
+      this.repositories.sales = new MongoDBSaleRepository(
+          {db: mongoose.connection},
+          this.config,
+      );
+
+      // Set item repository dependency if it exists
+      if (this.repositories.item) {
+        this.repositories.sales.setItemRepository(this.repositories.item);
+      }
+
+      // Set relationship repository dependency if it exists
+      if (this.repositories.relationship) {
+        this.repositories.sales.setRelationshipRepository(
+            this.repositories.relationship,
+        );
+      }
+
+      // Set transaction provider
+      const transactionProvider = this.createTransactionProvider();
+      this.repositories.sales.setTransactionProvider(transactionProvider);
+    }
+    return this.repositories.sales;
   }
 
   /**
    * Create a purchase repository
-   * @return {MongoPurchaseRepository} MongoDB purchase repo implementation
+   * @return {MongoDBPurchaseRepository} MongoDB purchase repository implementation
    */
   createPurchaseRepository() {
-    return new MongoPurchaseRepository();
+    if (!this.repositories.purchase) {
+      this.repositories.purchase = new MongoDBPurchaseRepository(this.config);
+
+      // Set item repository dependency if it exists
+      if (this.repositories.item) {
+        this.repositories.purchase.setItemRepository(this.repositories.item);
+      }
+
+      // Set relationship repository dependency if it exists
+      if (this.repositories.relationship) {
+        this.repositories.purchase.setRelationshipRepository(
+            this.repositories.relationship,
+        );
+      }
+
+      // Set asset repository dependency if it exists
+      if (this.repositories.asset) {
+        this.repositories.purchase.setAssetRepository(this.repositories.asset);
+      }
+
+      // Set transaction provider
+      const transactionProvider = this.createTransactionProvider();
+      this.repositories.purchase.setTransactionProvider(transactionProvider);
+    }
+    return this.repositories.purchase;
   }
 
   /**
@@ -92,15 +188,59 @@ class MongoDBProvider extends BaseDatabaseProvider {
    * @return {MongoTransactionProvider} MongoDB transaction implementation
    */
   createTransactionProvider() {
-    return new MongoTransactionProvider();
+    return new MongoTransactionProvider(this.config);
   }
 
   /**
    * Create an asset repository
-   * @return {MongoAssetRepository} MongoDB asset repository implementation
+   * @return {MongoDBAssetRepository} MongoDB asset repository implementation
    */
   createAssetRepository() {
-    return new MongoAssetRepository();
+    if (!this.repositories.asset) {
+      this.repositories.asset = new MongoDBAssetRepository(this.config);
+
+      // Set dependencies if available
+      if (this.repositories.relationship) {
+        this.repositories.asset.setRelationshipRepository(
+            this.repositories.relationship,
+        );
+      }
+
+      if (this.repositories.purchase) {
+        this.repositories.asset.setPurchaseRepository(this.repositories.purchase);
+      }
+
+      // Set transaction provider if needed
+      const transactionProvider = this.createTransactionProvider();
+      this.repositories.asset.setTransactionProvider(transactionProvider);
+    }
+    return this.repositories.asset;
+  }
+
+  /**
+   * Create a relationship repository
+   * @return {MongoDBRelationshipRepository} MongoDB relationship repository implementation
+   */
+  createRelationshipRepository() {
+    if (!this.repositories.relationship) {
+      this.repositories.relationship = new MongoDBRelationshipRepository(this.config);
+
+      // Set dependencies to other repositories
+      const repositories = {
+        item: this.createItemRepository(),
+        purchase: this.createPurchaseRepository(),
+        sales: this.createSalesRepository(),
+        asset: this.createAssetRepository(),
+      };
+
+      this.repositories.relationship.setRepositories(
+          repositories.item,
+          repositories.purchase,
+          repositories.sales,
+          repositories.asset,
+      );
+    }
+    return this.repositories.relationship;
   }
 
   /**

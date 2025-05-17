@@ -1,15 +1,32 @@
+/**
+ * MongoDB Provider Module
+ * Exports MongoDB implementations using composition pattern
+ */
+
 const MongoDBProvider = require("./provider");
-const MongoItemRepository = require("./itemRepository");
-const MongoSalesRepository = require("./salesRepository");
-const MongoPurchaseRepository = require("./purchaseRepository");
+const MongoDBItemRepository = require("./itemRepository");
+const MongoDBSaleRepository = require("./saleRepository");
+const MongoDBPurchaseRepository = require("./purchaseRepository");
+const MongoDBAssetRepository = require("./assetRepository");
+const MongoDBRelationshipRepository = require("./relationshipRepository");
 const MongoTransactionProvider = require("./transactionProvider");
-const MongoAssetRepository = require("./assetRepository");
+const {connectToMongo, checkConnectionHealth} = require("./connection");
 
 module.exports = {
+  // Provider implementation
   MongoDBProvider,
-  MongoItemRepository,
-  MongoSalesRepository,
-  MongoPurchaseRepository,
+
+  // Repository implementations
+  MongoDBItemRepository,
+  MongoDBSaleRepository,
+  MongoDBPurchaseRepository,
+  MongoDBAssetRepository,
+  MongoDBRelationshipRepository,
+
+  // Transaction provider
   MongoTransactionProvider,
-  MongoAssetRepository,
+
+  // Connection utilities
+  connectToMongo,
+  checkConnectionHealth,
 };

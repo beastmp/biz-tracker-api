@@ -1,115 +1,79 @@
+/**
+ * Sales Routes Module
+ *
+ * Handles all sales-related API endpoints including creating, reading,
+ * updating, and deleting sales, as well as managing sale item relationships.
+ *
+ * @module salesRoutes
+ * @requires express
+ * @requires ../providers/handlerFactory
+ * @requires ../middleware
+ * @requires ../providers
+ * @requires ../utils/transactionUtils
+ * @requires ../utils/relationshipUtils
+ */
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
-const handlerFactory = require("../utils/handlerFactory");
-const {validateRequiredFields} = require("../middleware");
-// Import providers module but don't immediately call getProviderFactory()
-const providers = require("../providers");
+const handlerFactory = require("../providers/handlerFactory");
+const {getProviderFactory} = require("../providers");
 const {withTransaction} = require("../utils/transactionUtils");
+const {
+  getSaleItems,
+} = require("../utils/relationshipUtils");
 
-// Create handlers using factory
-const createSale = handlerFactory.createOne("Sales");
-const updateSale = handlerFactory.updateOne("Sales", "Sale");
-// const deleteOne = handlerFactory.deleteOne("Sales", "Sale");
+// Create handlers using handlerFactory
+const getAllSales = handlerFactory.getAll("Sale");
+const getAllSalesWithRelationships = handlerFactory.getAllWithRelationships("Sale");
+const getSale = handlerFactory.getOne("Sale", "Sale");
+const getSaleWithRelationships = handlerFactory.getOneWithRelationships("Sale", "Sale");
+const createSaleWithRelationships = handlerFactory.createOneWithRelationships("Sale");
+const updateSaleWithRelationships = handlerFactory.updateOneWithRelationships("Sale", "Sale");
+const deleteSaleWithRelationships = handlerFactory.deleteOneWithRelationships("Sale", "Sale");
 
-// Define a function to get repository (don't call it immediately)
-const getSalesRepository = () =>
-  providers.getProviderFactory().getSalesRepository();
+/**
+ * Get the repository for sales operations
+ * @return {Object} Sales repository instance
+ */
+const getSalesRepository = () => {
+  return getProviderFactory().createSalesRepository();
+};
 
-// Get all sales
-router.get("/", async (req, res, next) => {
-  try {
-    const repository = providers.getProviderFactory().getSalesRepository();
-    const sales = await repository.findAll();
-    res.status(200).json(sales);
-  } catch (error) {
-    next(error);
-  }
-});
+// Get all sales without relationships (basic endpoint)
+router.get("/", getAllSales);
 
-// Get single sale
-router.get("/:id", async (req, res, next) => {
-  try {
-    const repository = providers.getProviderFactory().getSalesRepository();
-    const sale = await repository.findById(req.params.id);
+// Get all sales with relationships
+router.get("/with-relationships", getAllSalesWithRelationships);
 
-    if (!sale) {
-      return res.status(404).json({
-        status: "error",
-        message: "Sale not found",
-      });
-    }
+// Get one sale without relationships (basic endpoint)
+router.get("/:id", getSale);
 
-    res.json(sale);
-  } catch (err) {
-    next(err);
-  }
-});
+// Get one Sale with relationships
+router.get("/:id/with-relationships", getSaleWithRelationships);
 
-// Create new sale
-router.post("/",
-    validateRequiredFields(["items", "subtotal", "total"]),
-    createSale,
-);
+// Create new sale with relationships
+router.post("/", createSaleWithRelationships);
 
-// Update sale
-router.patch("/:id", updateSale);
+// Update sale with relationships
+router.patch("/:id", updateSaleWithRelationships);
 
-// Custom delete handler with explicit error handling
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const salesRepository = getSalesRepository();
-    const sale = await salesRepository.findById(id);
+// Delete Sale with relationship cleanup
+router.delete("/:id", deleteSaleWithRelationships);
 
-    if (!sale) {
-      return res.status(404).json({
-        status: "error",
-        message: "Sale not found",
-      });
-    }
-
-    await withTransaction(async (transaction) => {
-      // Restore inventory quantities
-      await salesRepository.restoreInventoryForSale(sale.items, transaction);
-
-      // Delete the sale
-      await salesRepository.delete(id, transaction);
-    });
-
-    res.json({
-      status: "success",
-      message: "Sale deleted successfully",
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Get sales report by date range
-router.get("/reports/by-date", async (req, res, next) => {
-  try {
-    const {startDate, endDate} = req.query;
-    const filter = {businessId: req.user.businessId};
-    const salesRepository = getSalesRepository();
-
-    const report = await salesRepository.getReport(filter, startDate, endDate);
-    res.json(report);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Get sales trends
+/**
+ * Get sales trends
+ * GET /sales/trends
+ */
 router.get("/trends", async (req, res, next) => {
   try {
     const {startDate, endDate} = req.query;
-    const filter = {businessId: req.user.businessId};
+    const filter = {};
     const salesRepository = getSalesRepository();
 
     if (!startDate || !endDate) {
-      return res.status(400).json({message:
-        "startDate and endDate are required"});
+      return res.status(400).json({
+        message: "startDate and endDate are required for trends",
+      });
     }
 
     const trends = await salesRepository.getTrends(filter, startDate, endDate);
@@ -119,13 +83,128 @@ router.get("/trends", async (req, res, next) => {
   }
 });
 
-// Get sales for a specific item
+/**
+ * Update sale payment status
+ * POST /sales/:id/payments
+ */
+router.post("/:id/payments", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const {amount} = req.body;
+
+    if (!amount || typeof amount !== "number" || amount <= 0) {
+      return res.status(400).json({
+        message: "Valid payment amount is required",
+      });
+    }
+
+    const salesRepository = getSalesRepository();
+
+    // Update payment status
+    const result = await withTransaction(async (transaction) => {
+      return await salesRepository.updatePaymentStatus(id, amount, transaction);
+    });
+
+    if (!result) {
+      return res.status(404).json({
+        message: "Sale not found",
+      });
+    }
+
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Get next invoice number
+ * GET /sales/utility/next-invoice
+ */
+router.get("/utility/next-invoice", async (req, res, next) => {
+  try {
+    const salesRepository = getSalesRepository();
+    const invoiceNumber = await salesRepository.getNextInvoiceNumber();
+
+    res.json({invoiceNumber});
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Get sales for a specific item
+ * GET /sales/item/:itemId
+ */
 router.get("/item/:itemId", async (req, res, next) => {
   try {
     const {itemId} = req.params;
     const salesRepository = getSalesRepository();
+
+    // Get all sales for this item
     const sales = await salesRepository.getAllByItemId(itemId);
+
     res.json(sales);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Get sale item relationships
+ * GET /sales/:id/items
+ */
+router.get("/:id/items", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const {populate = "false"} = req.query;
+
+    // Get sale items
+    const saleItems = await getSaleItems(id);
+
+    if (populate === "true") {
+      // Populate item details with correct repository method
+      const itemRepository = getProviderFactory().createItemRepository();
+      const populatedItems = [];
+
+      for (const relationship of saleItems) {
+        const item = await itemRepository.findById(relationship.secondaryId);
+
+        if (item) {
+          populatedItems.push({
+            ...relationship,
+            item,
+          });
+        } else {
+          populatedItems.push(relationship);
+        }
+      }
+
+      return res.json(populatedItems);
+    }
+
+    res.json(saleItems);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Get sales statistics
+ * GET /sales/stats
+ */
+router.get("/stats", async (req, res, next) => {
+  try {
+    const {startDate, endDate, businessId} = req.query;
+    const salesRepository = getSalesRepository();
+
+    const stats = await salesRepository.getStatistics({
+      startDate,
+      endDate,
+      businessId,
+    });
+
+    res.json(stats);
   } catch (err) {
     next(err);
   }

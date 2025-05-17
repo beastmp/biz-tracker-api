@@ -1,146 +1,99 @@
+/**
+ * Purchase Routes Module
+ *
+ * Defines the Express routes for purchase management operations including
+ * creating, reading, updating, and deleting purchases, as well as handling
+ * relationships between purchases and items/assets.
+ *
+ * @module purchaseRoutes
+ * @requires express
+ * @requires ../providers
+ * @requires ../utils/transactionUtils
+ * @requires ../utils/relationshipUtils
+ * @requires ../providers/handlerFactory
+ */
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const {getProviderFactory} = require("../providers");
-const {getPurchaseRepository} = require("../utils/repositoryUtils");
-const {getAssetRepository} = require("../utils/repositoryUtils");
-const {withTransaction} = require("../utils/transactionUtils");
+const handlerFactory = require("../providers/handlerFactory");
 
-// Get repository for special operations
-const purchaseRepository = getProviderFactory().getPurchaseRepository();
+// Create handlers using factory
+const getAllPurchases = handlerFactory.getAll("Purchase");
+const getAllPurchasesWithRelationships =
+  handlerFactory.getAllWithRelationships("Purchase");
+const getPurchase = handlerFactory.getOne("Purchase", "Purchase");
+const getPurchaseWithRelationships =
+  handlerFactory.getOneWithRelationships("Purchase", "Purchase");
+const createPurchaseWithRelationships =
+  handlerFactory.createOneWithRelationships("Purchase");
+const updatePurchaseWithRelationships =
+  handlerFactory.updateOneWithRelationships("Purchase", "Purchase");
+const deletePurchaseWithRelationships =
+  handlerFactory.deleteOneWithRelationships("Purchase", "Purchase");
 
-// Get all purchases
-router.get("/", async (req, res, next) => {
-  try {
-    const purchaseRepository = getPurchaseRepository();
-    const purchases = await purchaseRepository.findAll();
-    res.json(purchases);
-  } catch (err) {
-    next(err);
-  }
-});
+/**
+ * Get the repository for purchase operations
+ * @return {Object} Purchase repository instance
+ */
+const getPurchaseRepository = () => {
+  return getProviderFactory().createPurchaseRepository();
+};
 
-// Get single purchase
-router.get("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const purchaseRepository = getPurchaseRepository();
-    const purchase = await purchaseRepository.findById(id);
+/**
+ * Get all purchases
+ * GET /purchases
+ */
+router.get("/", getAllPurchases);
 
-    if (!purchase) {
-      return res.status(404).json({message: "Purchase not found"});
-    }
+/**
+ * Get all purchases with relationships
+ * GET /purchases/with-relationships
+ */
+router.get("/with-relationships", getAllPurchasesWithRelationships);
 
-    res.json(purchase);
-  } catch (err) {
-    next(err);
-  }
-});
+/**
+ * Get single purchase
+ * GET /purchases/:id
+ */
+router.get("/:id", getPurchase);
 
-// Create new purchase
-router.post("/", async (req, res, next) => {
-  try {
-    const purchaseData = req.body;
-    const purchaseRepository = getPurchaseRepository();
+/**
+ * Get single purchase with relationships
+ * GET /purchases/:id/with-relationships
+ */
+router.get("/:id/with-relationships", getPurchaseWithRelationships);
 
-    console.log(`Creating purchase with ${(purchaseData.items &&
-      purchaseData.items.length) || 0} items`);
+/**
+ * Create new purchase with relationships
+ * POST /purchases
+ */
+router.post("/", createPurchaseWithRelationships);
 
-    // If the status is 'received', we'll want to process any asset items
-    const shouldProcessAssets = purchaseData.status === "received";
+/**
+ * Update purchase with relationships
+ * PATCH /purchases/:id
+ */
+router.patch("/:id", updatePurchaseWithRelationships);
 
-    // Use transaction to ensure all operations are atomic
-    const newPurchase = await withTransaction(async (transaction) => {
-      console.log(`Starting transaction for purchase creation`);
-
-      // Create the purchase with transaction
-      const purchase =
-        await purchaseRepository.create(purchaseData, transaction);
-      console.log(`Purchase created with ID: ${purchase._id},
-        updating inventory for ${purchase.items.length} items`);
-
-      // If purchase is received and has asset items, create assets
-      if (shouldProcessAssets) {
-        await createAssetsFromPurchase(purchase._id, transaction);
-      }
-
-      return purchase;
-    });
-
-    console.log(`Purchase creation transaction completed successfully`);
-    res.status(201).json(newPurchase);
-  } catch (err) {
-    console.error("Error creating purchase:", err);
-    next(err);
-  }
-});
-
-// Update purchase
-router.patch("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const purchaseData = req.body;
-    const purchaseRepository = getPurchaseRepository();
-
-    // Check if the purchase is being marked as received
-    const purchase = await purchaseRepository.findById(id);
-    if (!purchase) {
-      return res.status(404).json({message: "Purchase not found"});
-    }
-
-    const isNewlyReceived =
-      purchase.status !== "received" &&
-      purchaseData.status === "received";
-
-    const updatedPurchase = await withTransaction(async (transaction) => {
-      const updated =
-        await purchaseRepository.update(id, purchaseData, transaction);
-
-      // If purchase is newly marked as received
-      // and has asset items, create assets
-      if (isNewlyReceived) {
-        await createAssetsFromPurchase(id, transaction);
-      }
-
-      return updated;
-    });
-
-    if (!updatedPurchase) {
-      return res.status(404).json({message: "Purchase not found"});
-    }
-
-    res.json(updatedPurchase);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Delete purchase
-router.delete("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const purchaseRepository = getPurchaseRepository();
-
-    const result = await purchaseRepository.delete(id);
-
-    if (!result) {
-      return res.status(404).json({message: "Purchase not found"});
-    }
-
-    res.status(204).send();
-  } catch (err) {
-    next(err);
-  }
-});
+/**
+ * Delete purchase with relationships
+ * DELETE /purchases/:id
+ */
+router.delete("/:id", deletePurchaseWithRelationships);
 
 // Get purchases report by date range
 router.get("/reports/by-date", async (req, res, next) => {
   try {
     const {startDate, endDate} = req.query;
     const filter = {};
+    const purchaseRepository = getPurchaseRepository();
 
-    const report =
-      await purchaseRepository.getReport(filter, startDate, endDate);
+    const report = await purchaseRepository.getReport(
+        filter,
+        startDate,
+        endDate,
+    );
     res.json(report);
   } catch (err) {
     next(err);
@@ -154,12 +107,17 @@ router.get("/trends", async (req, res, next) => {
     const filter = {};
 
     if (!startDate || !endDate) {
-      return res.status(400).json({message:
-        "startDate and endDate are required"});
+      return res.status(400).json({
+        message: "startDate and endDate are required",
+      });
     }
 
-    const trends =
-      await purchaseRepository.getTrends(filter, startDate, endDate);
+    const purchaseRepository = getPurchaseRepository();
+    const trends = await purchaseRepository.getTrends(
+        filter,
+        startDate,
+        endDate,
+    );
     res.json(trends);
   } catch (err) {
     next(err);
@@ -170,51 +128,12 @@ router.get("/trends", async (req, res, next) => {
 router.get("/item/:itemId", async (req, res, next) => {
   try {
     const {itemId} = req.params;
-    const purchaseRepository = getProviderFactory().getPurchaseRepository();
+    const purchaseRepository = getPurchaseRepository();
     const purchases = await purchaseRepository.getAllByItemId(itemId);
     res.json(purchases);
   } catch (err) {
     next(err);
   }
 });
-
-/**
- * Creates asset records for items marked as assets in a purchase
- * @param {string} purchaseId - The ID of the purchase containing asset items
- * @param {Object} transaction - The database transaction object
- * @return {Promise<void>}
- */
-async function createAssetsFromPurchase(purchaseId, transaction) {
-  const purchaseRepository = getPurchaseRepository();
-  const assetRepository = getAssetRepository();
-
-  // Get the purchase with its items
-  const purchase = await purchaseRepository.findById(purchaseId);
-  if (!purchase) return;
-
-  // Find items marked as assets
-  const assetItems = purchase.items.filter((item) => item.isAsset);
-  if (assetItems.length === 0) return;
-
-  // Create an asset for each asset item
-  for (const [index, item] of assetItems.entries()) {
-    const itemObj = typeof item.item === "object" ?
-      item.item :
-      {name: `Item ${index + 1}`};
-
-    await assetRepository.create({
-      name: (item.assetInfo && item.assetInfo.name) || itemObj.name,
-      category: (item.assetInfo && item.assetInfo.category) || "Equipment",
-      initialCost: item.totalCost,
-      currentValue: item.totalCost,
-      purchaseId: purchaseId,
-      purchaseDate: purchase.purchaseDate,
-      status: "active",
-      location: item.assetInfo ? item.assetInfo.location : undefined,
-      assignedTo: item.assetInfo ? item.assetInfo.assignedTo : undefined,
-      isInventoryItem: false,
-    }, transaction);
-  }
-}
 
 module.exports = router;

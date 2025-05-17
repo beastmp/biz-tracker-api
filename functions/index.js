@@ -13,7 +13,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const {initializeProviders} = require("./providers");
-const {errorHandler} = require("./middleware");
+const {errorHandler} = require("./validation");
 
 const app = express();
 
@@ -53,18 +53,22 @@ const setupApp = async () => {
     });
 
     // Import routes after provider initialization
-    const salesRoutes = require("./routes/sales");
-    const purchasesRoutes = require("./routes/purchases");
+    const assetsRoutes = require("./routes/assets");
     const itemsRoutes = require("./routes/items");
+    const purchasesRoutes = require("./routes/purchases");
+    const salesRoutes = require("./routes/sales");
+    const relationshipsRoutes = require("./routes/relationships");
+
     const healthRoutes = require("./routes/health");
-    const assetsRoutes = require("./routes/assets"); // Add assets routes
 
     // Routes - notice we're NOT using /api prefix here
-    app.use("/sales", salesRoutes);
-    app.use("/purchases", purchasesRoutes);
+    app.use("/assets", assetsRoutes);
     app.use("/items", itemsRoutes);
+    app.use("/purchases", purchasesRoutes);
+    app.use("/sales", salesRoutes);
+    app.use("/relationships", relationshipsRoutes);
+
     app.use("/health", healthRoutes);
-    app.use("/assets", assetsRoutes); // Register assets routes
 
     // Error handler
     app.use(errorHandler);

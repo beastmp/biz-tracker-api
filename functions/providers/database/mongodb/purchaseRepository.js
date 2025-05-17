@@ -1,671 +1,501 @@
-const {BasePurchaseRepository} = require("../../base");
-const Purchase = require("../../../models/purchase");
+/**
+ * MongoDB Purchase Repository Module
+ *
+ * Implements the MongoDB-specific logic for the Purchase entity, providing
+ * methods to create, retrieve, update, and delete purchase records in
+ * MongoDB.
+ *
+ * @module MongoDBPurchaseRepository
+ * @requires ../../repositories/purchaseRepository
+ * @requires ./modelFactory
+ * @requires ./schemaGenerator
+ */
+
+const PurchaseRepository = require("../../repositories/purchaseRepository");
+const {createModel} = require("./modelFactory");
+const {
+  documentToObject,
+  objectToDocument,
+} = require("./schemaGenerator");
 
 /**
- * MongoDB implementation of PurchaseRepository
+ * MongoDB-specific implementation of the Purchase repository
+ *
+ * @class MongoDBPurchaseRepository
+ * @extends PurchaseRepository
  */
-class MongoPurchaseRepository extends BasePurchaseRepository {
+class MongoDBPurchaseRepository extends PurchaseRepository {
   /**
-   * Creates a new instance of MongoPurchaseRepository
+   * Creates a new instance of MongoDBPurchaseRepository
+   *
    * @constructor
+   * @param {Object} config - Configuration options
+   * @param {string} [config.collectionPrefix] - Prefix for collection names
    */
-  constructor() {
-    super();
-    this.itemRepository = null; // Will be set by ProviderFactory
+  constructor(config = {}) {
+    super(config);
+    this.collectionPrefix = config.collectionPrefix || "";
+    this.model = createModel("Purchase", this.collectionPrefix);
   }
 
   /**
    * Find all purchases matching filter criteria
-   * @param {Object} filter Query filters
-   * @return {Promise<Array>} List of purchases
+   *
+   * @async
+   * @param {Object} filter - Query filters
+   * @param {Object} options - Query options (sorting, pagination, etc.)
+   * @return {Promise<Array>} - List of purchases
    */
-  async findAll(filter = {}) {
-    return await Purchase.find(filter).sort({purchaseDate: -1});
+  async findAll(filter = {}, options = {}) {
+    const {
+      limit = 100,
+      skip = 0,
+      sort = {purchaseDate: -1},
+      populate = false,
+    } = options;
+
+    try {
+      const query = this._buildQuery(filter);
+
+      let purchaseQuery = this.model
+          .find(query)
+          .sort(sort)
+          .skip(skip)
+          .limit(limit);
+
+      // Optionally populate item information
+      if (populate && populate.includes("items")) {
+        purchaseQuery = purchaseQuery.populate("items.itemId");
+      }
+
+      const purchases = await purchaseQuery.exec();
+
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error("Error finding purchases:", error);
+      throw error;
+    }
   }
 
   /**
    * Find purchase by ID
-   * @param {string} id Purchase ID
-   * @return {Promise<Object|null>} Purchase object or null if not found
+   *
+   * @async
+   * @param {string} id - Purchase ID
+   * @return {Promise<Object|null>} - Purchase object or null if not found
    */
   async findById(id) {
-    return await Purchase.findById(id);
+    if (!id) return null;
+
+    try {
+      const purchase = await this.model.findById(id).exec();
+      return purchase ? documentToObject(purchase) : null;
+    } catch (error) {
+      console.error(`Error finding purchase by ID ${id}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Find purchases by multiple IDs
+   *
+   * @async
+   * @param {Array<string>} ids - Array of purchase IDs
+   * @return {Promise<Array>} - Array of found purchases
+   */
+  async findByIds(ids) {
+    if (!ids || !ids.length) return [];
+
+    try {
+      const purchases = await this.model
+          .find({_id: {$in: ids}})
+          .exec();
+
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error(`Error finding purchases by IDs:`, error);
+      return [];
+    }
   }
 
   /**
    * Create a new purchase
-   * @param {Object} purchaseData Purchase data
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<Object>} Created purchase
+   *
+   * @async
+   * @param {Object} purchaseData - Purchase data
+   * @param {Object} [transaction] - Optional transaction
+   * @return {Promise<Object>} - Created purchase
    */
-  async create(purchaseData, transaction) {
-    const options = transaction ? {session: transaction} : {};
-    const purchase = new Purchase(purchaseData);
+  async create(purchaseData, transaction = null) {
+    try {
+      // If purchase number not provided, generate one
+      if (!purchaseData.purchaseNumber) {
+        purchaseData.purchaseNumber = await this.generatePurchaseNumber();
+      }
 
-    await purchase.save(options);
+      // Calculate total amount if items exist
+      if (purchaseData.items && purchaseData.items.length > 0) {
+        let totalAmount = 0;
 
-    // Update inventory quantities for the purchased items
-    // Only update if status indicates items were received
-    if (purchase.status === "received" ||
-        purchase.status === "partially_received") {
-      await this.updateInventoryForPurchase(purchase.items, transaction);
+        // Calculate total for each item and overall total
+        purchaseData.items = purchaseData.items.map((item) => {
+          const quantity = item.quantity || 0;
+          const unitPrice = item.unitPrice || 0;
+          const total = quantity * unitPrice;
+
+          totalAmount += total;
+
+          return {
+            ...item,
+            total,
+          };
+        });
+
+        purchaseData.totalAmount = totalAmount;
+      }
+
+      const docData = objectToDocument(purchaseData);
+      // eslint-disable-next-line new-cap
+      const purchase = new this.model(docData);
+
+      const options = transaction ? {session: transaction} : {};
+      await purchase.save(options);
+
+      return documentToObject(purchase);
+    } catch (error) {
+      console.error("Error creating purchase:", error);
+      throw error;
     }
-
-    return purchase;
   }
 
   /**
    * Update an existing purchase
-   * @param {string} id Purchase ID
-   * @param {Object} purchaseData Updated purchase data
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<Object|null>} Updated purchase or null if not found
+   *
+   * @async
+   * @param {string} id - Purchase ID
+   * @param {Object} purchaseData - Updated purchase data
+   * @param {Object} [transaction] - Optional transaction
+   * @return {Promise<Object|null>} - Updated purchase or null if not found
    */
-  async update(id, purchaseData, transaction) {
-    const options = transaction ? {session: transaction} : {};
+  async update(id, purchaseData, transaction = null) {
+    if (!id) throw new Error("ID is required for update");
 
-    const purchase = await Purchase.findById(id);
-    if (!purchase) return null;
+    try {
+      const docData = objectToDocument(purchaseData);
 
-    // Update all provided fields
-    Object.keys(purchaseData).forEach((key) => {
-      purchase[key] = purchaseData[key];
-    });
+      // Remove id from data to prevent _id modification attempt
+      if (docData._id) {
+        delete docData._id;
+      }
 
-    await purchase.save(options);
-    return purchase;
+      const options = {new: true};
+      if (transaction) {
+        options.session = transaction;
+      }
+
+      const purchase = await this.model
+          .findByIdAndUpdate(id, docData, options)
+          .exec();
+
+      return purchase ? documentToObject(purchase) : null;
+    } catch (error) {
+      console.error(`Error updating purchase ${id}:`, error);
+      throw error;
+    }
   }
 
   /**
    * Delete a purchase
-   * @param {string} id Purchase ID
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<boolean>} True if deleted, false if not found
+   *
+   * @async
+   * @param {string} id - Purchase ID
+   * @param {Object} [transaction] - Optional transaction
+   * @return {Promise<boolean>} - True if deleted, false if not found
    */
-  async delete(id, transaction) {
-    const options = transaction ? {session: transaction} : {};
-    const result = await Purchase.findByIdAndDelete(id, options);
+  async delete(id, transaction = null) {
+    if (!id) return false;
 
-    return !!result;
+    try {
+      const options = transaction ? {session: transaction} : {};
+      const result = await this.model.findByIdAndDelete(id, options).exec();
+      return !!result;
+    } catch (error) {
+      console.error(`Error deleting purchase ${id}:`, error);
+      throw error;
+    }
   }
 
   /**
-   * Update inventory when creating a purchase
-   * @param {Array} items Items in the purchase
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<void>}
+   * Count purchases
+   *
+   * @async
+   * @param {Object} filter - Filter criteria
+   * @return {Promise<number>} - Count of matching purchases
    */
-  async updateInventoryForPurchase(items, transaction) {
-    if (!this.itemRepository) {
-      throw new Error(`ItemRepository not available
-        in MongoPurchaseRepository`);
+  async count(filter = {}) {
+    try {
+      const query = this._buildQuery(filter);
+      return await this.model.countDocuments(query).exec();
+    } catch (error) {
+      console.error("Error counting purchases:", error);
+      throw error;
     }
+  }
 
-    console.log(`Starting inventory update
-        for ${items && items.length || 0} purchase items`);
+  /**
+   * Search purchases
+   *
+   * @async
+   * @param {string} searchText - Search text
+   * @param {Object} options - Search options
+   * @return {Promise<Array>} - List of matching purchases
+   */
+  async search(searchText, options = {}) {
+    const {
+      limit = 20,
+      skip = 0,
+      fields = ["purchaseNumber", "supplier", "notes"],
+    } = options;
 
-    // Exit early if no items to process
-    if (!items || items.length === 0) {
-      console.log("No items to update inventory for");
+    try {
+      // If text index exists, use it
+      if (searchText && searchText.trim()) {
+        try {
+          const purchases = await this.model
+              .find(
+                  {$text: {$search: searchText}},
+                  {score: {$meta: "textScore"}},
+              )
+              .sort({score: {$meta: "textScore"}})
+              .skip(skip)
+              .limit(limit)
+              .exec();
+
+          return purchases.map(documentToObject);
+        } catch (err) {
+          // Fall back to regex search if text search fails
+          console.warn("Text search failed, falling back to regex:", err);
+        }
+      }
+
+      // Fallback: regex search on specified fields
+      const query = searchText ?
+        {
+          $or: fields.map((field) => ({
+            [field]: {$regex: searchText, $options: "i"},
+          })),
+        } :
+        {};
+
+      const purchases = await this.model
+          .find(query)
+          .sort({purchaseDate: -1})
+          .skip(skip)
+          .limit(limit)
+          .exec();
+
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error(`Error searching purchases for "${searchText}":`, error);
       return [];
     }
+  }
 
-    // Group items by item ID to consolidate updates for the same item
-    const itemGroups = {};
+  /**
+   * Get purchases by supplier
+   *
+   * @async
+   * @param {string} supplierId - Supplier ID
+   * @param {Object} [options={}] - Additional query options
+   * @return {Promise<Array>} - List of purchases from the supplier
+   */
+  async getPurchasesBySupplier(supplierId, options = {}) {
+    try {
+      // Try to find by supplierId field first
+      const query = {};
 
-    // First pass: group items by their ID
-    for (const purchaseItem of items) {
-      if (!purchaseItem.item) {
-        console.warn("Skipping purchase item with no item reference");
-        continue;
+      if (supplierId) {
+        query.supplierId = supplierId;
       }
 
-      const itemId = typeof purchaseItem.item === "object" ?
-        purchaseItem.item._id.toString() : purchaseItem.item.toString();
+      const {
+        limit = 100,
+        skip = 0,
+        sort = {purchaseDate: -1},
+      } = options;
 
-      if (!itemGroups[itemId]) {
-        itemGroups[itemId] = [];
-      }
+      const purchases = await this.model
+          .find(query)
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .exec();
 
-      itemGroups[itemId].push(purchaseItem);
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error(
+          `Error getting purchases for supplier ${supplierId}:`,
+          error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get purchases by item
+   *
+   * @async
+   * @param {string} itemId - Item ID
+   * @param {Object} [options={}] - Additional query options
+   * @return {Promise<Array>} - List of purchases containing the item
+   */
+  async getPurchasesByItem(itemId, options = {}) {
+    try {
+      if (!itemId) return [];
+
+      const {
+        limit = 100,
+        skip = 0,
+        sort = {purchaseDate: -1},
+      } = options;
+
+      // MongoDB specific query to find purchases containing the item
+      const query = {"items.itemId": itemId};
+
+      const purchases = await this.model
+          .find(query)
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .exec();
+
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error(`Error getting purchases for item ${itemId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find purchases using a complex query
+   *
+   * @async
+   * @param {Object} query - Complex query object with filters and operators
+   * @param {Object} [options={}] - Additional query options
+   * @return {Promise<Array>} - List of matching purchases
+   */
+  async findByQuery(query = {}, options = {}) {
+    try {
+      const {
+        limit = 100,
+        skip = 0,
+        sort = {purchaseDate: -1},
+      } = options;
+
+      const mongoQuery = this._buildQuery(query);
+
+      const purchases = await this.model
+          .find(mongoQuery)
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .exec();
+
+      return purchases.map(documentToObject);
+    } catch (error) {
+      console.error("Error finding purchases by query:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a unique purchase number
+   *
+   * @async
+   * @return {Promise<string>} - Generated unique purchase number
+   */
+  async generatePurchaseNumber() {
+    try {
+      const date = new Date();
+      const year = date.getFullYear().toString().substr(-2);
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const prefix = `P${year}${month}`;
+
+      // Count purchases with this prefix
+      const count = await this.model.countDocuments({
+        purchaseNumber: {$regex: `^${prefix}`},
+      }).exec();
+
+      // Generate purchase number with sequential number
+      const sequentialNumber = (count + 1).toString().padStart(4, "0");
+      return `${prefix}-${sequentialNumber}`;
+    } catch (error) {
+      console.error("Error generating purchase number:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Build query object from filters
+   * @param {Object} filters - Filter criteria
+   * @return {Object} - MongoDB query
+   * @private
+   */
+  _buildQuery(filters) {
+    const query = {};
+
+    if (!filters || typeof filters !== "object") {
+      return query;
     }
 
-    console.log(`Grouped purchase items into
-        ${Object.keys(itemGroups).length} unique items`);
+    Object.entries(filters).forEach(([key, value]) => {
+      // Handle special operators
+      if (key.startsWith("$")) {
+        query[key] = value;
+        return;
+      }
 
-    // Create an array of update promises - one for each unique item
-    const updatePromises = [];
+      // Handle date range queries for purchaseDate
+      if (
+        key === "purchaseDate" &&
+        typeof value === "object" &&
+        (value.$gte || value.$lte)
+      ) {
+        query.purchaseDate = {};
 
-    // Process each unique item with all its purchase entries
-    for (const [itemId, purchaseItems] of Object.entries(itemGroups)) {
-      updatePromises.push((async () => {
-        try {
-          console.log(`Processing ${purchaseItems.length}
-            purchases for item ${itemId}`);
-
-          // Get the current state of the item
-          const item = await this.itemRepository.findById(itemId);
-
-          if (!item) {
-            console.warn(`Item ${itemId} not found
-              when updating inventory for purchase`);
-            return {
-              success: false,
-              itemId,
-              error: "Item not found",
-            };
-          }
-
-          console.log(`Found item ${itemId}: ${item.name},
-            tracking type: ${item.trackingType || "quantity"}`);
-
-          // Aggregate all values from purchase items for this item
-          const aggregate = {
-            quantity: 0,
-            weight: 0,
-            length: 0,
-            area: 0,
-            volume: 0,
-            // Track the highest cost per unit for price updates
-            maxCostPerUnit: 0,
-            totalCost: 0,
-            totalMeasurement: 0,
-          };
-
-          // Calculate totals for all purchase items for this product
-          for (const purchaseItem of purchaseItems) {
-            // Sum up quantities based on tracking type
-            aggregate.quantity += parseFloat(purchaseItem.quantity || 0);
-            aggregate.weight += parseFloat(purchaseItem.weight || 0);
-            aggregate.length += parseFloat(purchaseItem.length || 0);
-            aggregate.area += parseFloat(purchaseItem.area || 0);
-            aggregate.volume += parseFloat(purchaseItem.volume || 0);
-
-            // Track cost data for cost/price updates
-            const purchaseCost = purchaseItem.costPerUnit ||
-              (purchaseItem.totalCost && purchaseItem.quantity ?
-               purchaseItem.totalCost / purchaseItem.quantity : 0);
-
-            if (purchaseCost > aggregate.maxCostPerUnit) {
-              aggregate.maxCostPerUnit = purchaseCost;
-            }
-
-            // Add to total cost
-            aggregate.totalCost += parseFloat(purchaseItem.totalCost || 0);
-
-            // Add to total measurement based on tracking type
-            if (item.trackingType === "weight") {
-              aggregate.totalMeasurement +=
-              parseFloat(purchaseItem.weight || 0);
-            } else if (item.trackingType === "length") {
-              aggregate.totalMeasurement +=
-              parseFloat(purchaseItem.length || 0);
-            } else if (item.trackingType === "area") {
-              aggregate.totalMeasurement +=
-              parseFloat(purchaseItem.area || 0);
-            } else if (item.trackingType === "volume") {
-              aggregate.totalMeasurement +=
-              parseFloat(purchaseItem.volume || 0);
-            } else {
-              // Default to quantity tracking
-              aggregate.totalMeasurement +=
-              parseFloat(purchaseItem.quantity || 0);
-            }
-          }
-
-          console.log(`Aggregate values for item ${itemId}: `, aggregate);
-
-          // Update data to apply to the item
-          const updateData = {};
-
-          // Apply the appropriate measurement value based on tracking type
-          switch (item.trackingType) {
-            case "weight": {
-              const currentWeight = parseFloat(item.weight || 0);
-              const newWeight = currentWeight + aggregate.weight;
-              updateData.weight = newWeight;
-              console.log(`Updating weight for item ${itemId}:
-                ${currentWeight} + ${aggregate.weight} = ${newWeight}`);
-              break;
-            }
-            case "length": {
-              const currentLength = parseFloat(item.length || 0);
-              const newLength = currentLength + aggregate.length;
-              updateData.length = newLength;
-              console.log(`Updating length for item ${itemId}:
-                ${currentLength} + ${aggregate.length} = ${newLength}`);
-              break;
-            }
-            case "area": {
-              const currentArea = parseFloat(item.area || 0);
-              const newArea = currentArea + aggregate.area;
-              updateData.area = newArea;
-              console.log(`Updating area for item ${itemId}:
-                ${currentArea} + ${aggregate.area} = ${newArea}`);
-              break;
-            }
-            case "volume": {
-              const currentVolume = parseFloat(item.volume || 0);
-              const newVolume = currentVolume + aggregate.volume;
-              updateData.volume = newVolume;
-              console.log(`Updating volume for item ${itemId}:
-                ${currentVolume} + ${aggregate.volume} = ${newVolume}`);
-              break;
-            }
-            default: {
-              // Default to quantity tracking
-              const currentQuantity = parseFloat(item.quantity || 0);
-              const newQuantity = currentQuantity + aggregate.quantity;
-              updateData.quantity = newQuantity;
-              console.log(`Updating quantity for item ${itemId}:
-                ${currentQuantity} + ${aggregate.quantity} = ${newQuantity}`);
-              break;
-            }
-          }
-
-          // Always update cost and price if we have valid cost data
-          if (aggregate.maxCostPerUnit > 0) {
-            updateData.cost = aggregate.maxCostPerUnit;
-            updateData.price = aggregate.maxCostPerUnit;
-            console.log(`Updating cost/price for item ${itemId}
-              to ${aggregate.maxCostPerUnit} (highest cost per unit)`);
-          } else if (aggregate.totalCost >
-              0 && aggregate.totalMeasurement > 0) {
-            // Calculate average cost if direct cost per unit wasn't available
-            const avgCost = aggregate.totalCost / aggregate.totalMeasurement;
-            updateData.cost = avgCost;
-            updateData.price = avgCost;
-            console.log(`Updating cost/price for item ${itemId}
-              to ${avgCost} (calculated from total cost / total measurement)`);
-          }
-
-          // Add last updated timestamp
-          updateData.lastUpdated = new Date();
-
-          // Apply the update to the item
-          console.log(`Saving item ${itemId} with data:`, updateData);
-
-          // Use itemRepository.update to ensure proper transaction handling
-          const result =
-            await this.itemRepository.update(itemId, updateData, transaction);
-
-          console.log(`Item ${itemId} update result:`,
-            result ? "Success" : "Failed");
-
-          return {
-            success: true,
-            itemId,
-            updateData,
-            originalData: {
-              trackingType: item.trackingType,
-              quantity: item.quantity,
-              weight: item.weight,
-              length: item.length,
-              area: item.area,
-              volume: item.volume,
-              cost: item.cost,
-              price: item.price,
-            },
-          };
-        } catch (error) {
-          console.error(`Error updating inventory for item ${itemId}:`, error);
-          return {
-            success: false,
-            itemId,
-            error: error.message,
-          };
+        if (value.$gte) {
+          query.purchaseDate.$gte = new Date(value.$gte);
         }
-      })());
-    }
 
-    try {
-      // Execute all update promises and wait for all to complete
-      console.log(`Executing ${updatePromises.length}
-        inventory update operations`);
-      const results = await Promise.all(updatePromises);
-
-      const successCount = results.filter((r) => r && r.success).length;
-      const failureCount = results.length - successCount;
-
-      console.log(`Inventory update complete:
-        ${successCount} successes, ${failureCount} failures`);
-
-      return results;
-    } catch (error) {
-      console.error(`Fatal error during inventory update:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Update inventory for purchase update
-   * @param {Array} originalItems Original items in the purchase
-   * @param {Array} updatedItems Updated items in the purchase
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<void>}
-   */
-  async updateInventoryForPurchaseUpdate(originalItems,
-      updatedItems, transaction) {
-    // First, revert the inventory changes from the original purchase
-    await this.revertInventoryForPurchase(originalItems, transaction);
-
-    // Then, apply the inventory changes for the updated purchase
-    await this.updateInventoryForPurchase(updatedItems, transaction);
-  }
-
-  /**
-   * Revert inventory when deleting a purchase
-   * @param {Array} items Items in the purchase
-   * @param {Object} [transaction] Database transaction/session
-   * @return {Promise<void>}
-   */
-  async revertInventoryForPurchase(items, transaction) {
-    if (!this.itemRepository) {
-      throw new Error(`ItemRepository not available
-        in MongoPurchaseRepository`);
-    }
-
-    console.log(`Starting inventory revert for
-      ${items && items.length || 0} purchase items`);
-
-    // Exit early if no items to process
-    if (!items || items.length === 0) {
-      console.log("No items to revert inventory for");
-      return [];
-    }
-
-    // Group items by item ID to consolidate updates for the same item
-    const itemGroups = {};
-
-    // First pass: group items by their ID
-    for (const purchaseItem of items) {
-      if (!purchaseItem.item) {
-        console.warn("Skipping purchase item with no item reference");
-        continue;
-      }
-
-      const itemId = typeof purchaseItem.item === "object" ?
-        purchaseItem.item._id.toString() : purchaseItem.item.toString();
-
-      if (!itemGroups[itemId]) {
-        itemGroups[itemId] = [];
-      }
-
-      itemGroups[itemId].push(purchaseItem);
-    }
-
-    console.log(`Grouped purchase items
-      into ${Object.keys(itemGroups).length} unique items for revert`);
-
-    // Create an array of revert promises - one for each unique item
-    const revertPromises = [];
-
-    // Process each unique item with all its purchase entries
-    for (const [itemId, purchaseItems] of Object.entries(itemGroups)) {
-      revertPromises.push((async () => {
-        try {
-          console.log(`Processing ${purchaseItems.length}
-            purchases to revert for item ${itemId}`);
-
-          // Get the current state of the item
-          const item = await this.itemRepository.findById(itemId);
-
-          if (!item) {
-            console.warn(`Item ${itemId} not found
-              when reverting inventory for purchase`);
-            return {
-              success: false,
-              itemId,
-              error: "Item not found",
-            };
-          }
-
-          console.log(`Found item ${itemId}: ${item.name},
-            tracking type: ${item.trackingType || "quantity"}`);
-
-          // Aggregate all values from purchase items for this item
-          const aggregate = {
-            quantity: 0,
-            weight: 0,
-            length: 0,
-            area: 0,
-            volume: 0,
-          };
-
-          // Calculate totals for all purchase items for this product
-          for (const purchaseItem of purchaseItems) {
-            // Sum up quantities based on tracking type
-            aggregate.quantity += parseFloat(purchaseItem.quantity || 0);
-            aggregate.weight += parseFloat(purchaseItem.weight || 0);
-            aggregate.length += parseFloat(purchaseItem.length || 0);
-            aggregate.area += parseFloat(purchaseItem.area || 0);
-            aggregate.volume += parseFloat(purchaseItem.volume || 0);
-          }
-
-          console.log(`Aggregate values to revert for item ${itemId}: `,
-              aggregate);
-
-          // Update data to apply to the item
-          const updateData = {};
-
-          // Apply the appropriate measurement value based on tracking type
-          switch (item.trackingType) {
-            case "weight": {
-              const currentWeight = parseFloat(item.weight || 0);
-              const newWeight = Math.max(0, currentWeight - aggregate.weight);
-              updateData.weight = newWeight;
-              console.log(`Reverting weight for item ${itemId}:
-                ${currentWeight} - ${aggregate.weight} = ${newWeight}`);
-              break;
-            }
-            case "length": {
-              const currentLength = parseFloat(item.length || 0);
-              const newLength = Math.max(0, currentLength - aggregate.length);
-              updateData.length = newLength;
-              console.log(`Reverting length for item ${itemId}:
-                ${currentLength} - ${aggregate.length} = ${newLength}`);
-              break;
-            }
-            case "area": {
-              const currentArea = parseFloat(item.area || 0);
-              const newArea = Math.max(0, currentArea - aggregate.area);
-              updateData.area = newArea;
-              console.log(`Reverting area for item ${itemId}:
-                ${currentArea} - ${aggregate.area} = ${newArea}`);
-              break;
-            }
-            case "volume": {
-              const currentVolume = parseFloat(item.volume || 0);
-              const newVolume = Math.max(0, currentVolume - aggregate.volume);
-              updateData.volume = newVolume;
-              console.log(`Reverting volume for item ${itemId}:
-                ${currentVolume} - ${aggregate.volume} = ${newVolume}`);
-              break;
-            }
-            default: {
-              // Default to quantity tracking
-              const currentQuantity = parseFloat(item.quantity || 0);
-              const newQuantity =
-                Math.max(0, currentQuantity - aggregate.quantity);
-              updateData.quantity = newQuantity;
-              console.log(`Reverting quantity for item ${itemId}:
-                ${currentQuantity} - ${aggregate.quantity} = ${newQuantity}`);
-              break;
-            }
-          }
-
-          // Add last updated timestamp
-          updateData.lastUpdated = new Date();
-
-          // Apply the update to the item
-          console.log(`Saving reverted item ${itemId} with data:`, updateData);
-
-          // Use itemRepository.update to ensure proper transaction handling
-          const result =
-            await this.itemRepository.update(itemId, updateData, transaction);
-
-          console.log(`Item ${itemId} revert result:`,
-            result ? "Success" : "Failed");
-
-          return {
-            success: true,
-            itemId,
-            updateData,
-          };
-        } catch (error) {
-          console.error(`Error reverting inventory for item ${itemId}:`, error);
-          return {
-            success: false,
-            itemId,
-            error: error.message,
-          };
+        if (value.$lte) {
+          query.purchaseDate.$lte = new Date(value.$lte);
         }
-      })());
-    }
 
-    try {
-      // Execute all revert promises and wait for all to complete
-      console.log(`Executing ${revertPromises.length}
-        inventory revert operations`);
-      const results = await Promise.all(revertPromises);
-
-      const successCount = results.filter((r) => r && r.success).length;
-      const failureCount = results.length - successCount;
-
-      console.log(`Inventory revert complete:
-        ${successCount} successes, ${failureCount} failures`);
-
-      return results;
-    } catch (error) {
-      console.error(`Fatal error during inventory revert:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get purchase report
-   * @param {Object} filter Query filters
-   * @param {string} [startDate] Start date for report
-   * @param {string} [endDate] End date for report
-   * @return {Promise<Object>} Report data
-   */
-  async getReport(filter, startDate, endDate) {
-    // Create date filters if provided
-    let dateFilter = {};
-    if (startDate && endDate) {
-      dateFilter = {
-        purchaseDate: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate),
-        },
-      };
-    }
-
-    // Combine filters
-    const combinedFilter = {...filter, ...dateFilter};
-
-    // Get purchases within the date range
-    const purchases = await this.findAll(combinedFilter);
-
-    // Calculate metrics
-    const totalPurchases = purchases.length;
-    const totalSpent = purchases.reduce((sum, purchase) =>
-      sum + purchase.total, 0);
-    const averagePurchaseValue = totalPurchases > 0 ?
-      totalSpent / totalPurchases : 0;
-
-    return {
-      totalPurchases,
-      totalSpent,
-      averagePurchaseValue,
-      purchases,
-    };
-  }
-
-  /**
-   * Get purchase trends
-   * @param {Object} filter Query filters
-   * @param {string} startDate Start date for trends
-   * @param {string} endDate End date for trends
-   * @return {Promise<Object>} Trends data
-   */
-  async getTrends(filter, startDate, endDate) {
-    const dateFilter = {
-      purchaseDate: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      },
-    };
-
-    const combinedFilter = {...filter, ...dateFilter};
-
-    // Get daily purchases
-    const dailyPurchases = await Purchase.aggregate([
-      {$match: combinedFilter},
-      {
-        $group: {
-          _id: {
-            year: {$year: "$purchaseDate"},
-            month: {$month: "$purchaseDate"},
-            day: {$dayOfMonth: "$purchaseDate"},
-          },
-          count: {$sum: 1},
-          total: {$sum: "$total"},
-        },
-      },
-      {$sort: {"_id.year": 1, "_id.month": 1, "_id.day": 1}},
-    ]);
-
-    // Format results for front-end visualization
-    const formattedResults = dailyPurchases.map((day) => ({
-      date: `${day._id.year}-${day._id.month.toString().padStart(2, "0")}
-        -${day._id.day.toString().padStart(2, "0")}`,
-      purchases: day.count,
-      spent: day.total,
-    }));
-
-    return {
-      trends: formattedResults,
-      summary: {
-        totalDays: formattedResults.length,
-        averageDailyPurchases: formattedResults.reduce((sum, day) =>
-          sum + day.purchases, 0) / Math.max(1, formattedResults.length),
-        averageDailySpend: formattedResults.reduce((sum, day) =>
-          sum + day.spent, 0) / Math.max(1, formattedResults.length),
-      },
-    };
-  }
-
-  /**
-   * Get all purchases containing a specific item
-   * @param {string} itemId - ID of the item to filter by
-   * @return {Promise<Array>} List of purchases containing the item
-   */
-  async getAllByItemId(itemId) {
-    try {
-      const mongoose = require("mongoose");
-      let objectId;
-
-      // Try to convert the itemId to an ObjectId if it's a valid format
-      try {
-        objectId = new mongoose.Types.ObjectId(itemId);
-      } catch (error) {
-        objectId = null;
+        return;
       }
 
-      // Create a query that handles both string IDs and ObjectIds
-      const query = {
-        "items.item": objectId ?
-          {$in: [itemId, objectId]} :
-          itemId,
-      };
+      // Handle nested objects with dot notation
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        Object.entries(value).forEach(([operator, operand]) => {
+          if (operator.startsWith("$")) {
+            query[key] = {...query[key], [operator]: operand};
+          } else {
+            query[`${key}.${operator}`] = operand;
+          }
+        });
+        return;
+      }
 
-      return await Purchase.find(query).sort({purchaseDate: -1});
-    } catch (error) {
-      console.error("Error getting purchases by item ID:", error);
-      throw error;
-    }
+      // Handle regular values
+      query[key] = value;
+    });
+
+    return query;
   }
 }
 
-module.exports = MongoPurchaseRepository;
+module.exports = MongoDBPurchaseRepository;

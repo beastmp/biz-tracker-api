@@ -1,37 +1,115 @@
 /**
- * Item Routes
+ * Item Routes Module
+ *
+ * Defines the Express routes for item management operations including
+ * creating, reading, updating, and deleting items, as well as handling
+ * relationships between items.
+ *
+ * @module itemRoutes
+ * @requires express
+ * @requires ../utils/fileUpload
+ * @requires ../providers/handlerFactory
+ * @requires ../validation
+ * @requires ../providers
+ * @requires ../utils/transactionUtils
+ * @requires ../utils/inventoryUtils
+ * @requires ../utils/relationshipUtils
  */
 const express = require("express");
 // eslint-disable-next-line new-cap
 const router = express.Router();
 const {upload, uploadErrorHandler, uploadToStorage} =
   require("../utils/fileUpload");
-const handlerFactory = require("../utils/handlerFactory");
-const {processFileUpload} = require("../middleware");
+const handlerFactory = require("../providers/handlerFactory");
+const {processFileUpload} = require("../validation");
 const {getProviderFactory} = require("../providers");
 const {withTransaction} = require("../utils/transactionUtils");
-const {getItemRepository} = require("../utils/repositoryUtils");
-const {rebuildRelationships} = require("../utils/itemRelationships");
 const {rebuildInventory, rebuildItemInventory} =
   require("../utils/inventoryUtils");
-const Item = require("../models/item"); // Add this import statement
+const {
+  addProductMaterialRelationship,
+  addDerivedItemRelationship,
+  getProductComponents,
+  getProductsUsingMaterial,
+  getSourceForDerivedItem,
+  getDerivedItems,
+  convertItemRelationships,
+  convertAllRelationships,
+} = require("../utils/relationshipUtils");
 
 // Create handlers using factory
 const getAllItems = handlerFactory.getAll("Item");
+const getAllItemsWithRelationships = handlerFactory.getAllWithRelationships("Item");
 const getItem = handlerFactory.getOne("Item", "Item");
-const createItem = handlerFactory.createOne("Item");
-const updateItem = handlerFactory.updateOne("Item", "Item");
-const deleteItem = handlerFactory.deleteOne("Item", "Item");
+const getItemWithRelationships = handlerFactory.getOneWithRelationships("Item", "Item");
+const createItemWithRelationships = handlerFactory.createOneWithRelationships("Item");
+const updateItemWithRelationships = handlerFactory.updateOneWithRelationships("Item", "Item");
+const deleteItemWithRelationships = handlerFactory.deleteOneWithRelationships("Item", "Item");
 
-// Get repository for special operations
-const itemRepository = getProviderFactory().getItemRepository();
+/**
+ * Get the repository for item operations
+ * @return {Object} Item repository instance
+ */
+const getItemRepository = () => {
+  return getProviderFactory().createItemRepository();
+};
 
-// Get all items
+/**
+ * Get the relationship repository for relationship operations
+ * @return {Object} Relationship repository instance
+ */
+const getRelationshipRepository = () => {
+  return getProviderFactory().createRelationshipRepository();
+};
+
+// Get all items without relationships (basic endpoint)
 router.get("/", getAllItems);
 
-// Get the next available SKU number
+// Get all items with relationships
+router.get("/with-relationships", getAllItemsWithRelationships);
+
+// Get one item without relationships (basic endpoint)
+router.get("/:id", getItem);
+
+// Get one item with relationships
+router.get("/:id/with-relationships", getItemWithRelationships);
+
+/**
+ * Create new item
+ * POST /items
+ */
+router.post(
+    "/",
+    upload.single("image"),
+    uploadErrorHandler,
+    uploadToStorage,
+    processFileUpload,
+    createItemWithRelationships,
+);
+
+/**
+* Update item
+* PATCH /items/:id
+*/
+router.patch(
+    "/:id",
+    upload.single("image"),
+    uploadErrorHandler,
+    uploadToStorage,
+    processFileUpload,
+    updateItemWithRelationships,
+);
+
+// Delete item with relationship cleanup
+router.delete("/:id", deleteItemWithRelationships);
+
+/**
+ * Get the next available SKU number
+ * GET /items/nextsku
+ */
 router.get("/nextsku", async (req, res, next) => {
   try {
+    const itemRepository = getItemRepository();
     const nextSku = await itemRepository.getNextSku();
     res.json({nextSku});
   } catch (err) {
@@ -39,9 +117,13 @@ router.get("/nextsku", async (req, res, next) => {
   }
 });
 
-// Get all categories
+/**
+ * Get all categories
+ * GET /items/categories
+ */
 router.get("/categories", async (req, res, next) => {
   try {
+    const itemRepository = getItemRepository();
     const categories = await itemRepository.getCategories();
     res.json(categories);
   } catch (err) {
@@ -49,9 +131,13 @@ router.get("/categories", async (req, res, next) => {
   }
 });
 
-// Get all tags
+/**
+ * Get all tags
+ * GET /items/tags
+ */
 router.get("/tags", async (req, res, next) => {
   try {
+    const itemRepository = getItemRepository();
     const tags = await itemRepository.getTags();
     res.json(tags);
   } catch (err) {
@@ -59,88 +145,10 @@ router.get("/tags", async (req, res, next) => {
   }
 });
 
-// Create new item
-router.post("/",
-    upload.single("image"),
-    uploadErrorHandler,
-    uploadToStorage,
-    processFileUpload,
-    createItem,
-);
-
-// Get one item
-router.get("/:id", async (req, res, next) => {
-  try {
-    const {id} = req.params;
-    const {populate = "false"} = req.query;
-
-    // For populated requests, use a custom approach
-    // to ensure all relationships are populated
-    if (populate === "true") {
-      // Add debug logging
-      console.log(`Fetching item ${id} with populated relationships`);
-
-      const item = await Item.findById(id)
-          .populate("derivedFrom.item")
-          .populate("derivedItems.item")
-          .populate("components.item")
-          .populate("usedInProducts");
-
-      if (!item) {
-        console.log(`Item ${id} not found`);
-        return res.status(404).json({message: "Item not found"});
-      }
-
-      // Add debug logging for relationships
-      console.log(`Item ${id} found. Has derivedFrom:`, !!item.derivedFrom);
-      console.log(`Item ${id} has ${item.derivedItems ?
-        item.derivedItems.length : 0} derived items`);
-
-      return res.json(item);
-    }
-
-    // Use the standard handler for non-populated requests
-    return getItem(req, res, next);
-  } catch (err) {
-    console.error(`Error fetching item ${req.params.id}:`, err);
-    next(err);
-  }
-});
-
-// Update item
-router.patch("/:id",
-    upload.single("image"),
-    uploadErrorHandler,
-    uploadToStorage,
-    processFileUpload,
-    updateItem,
-);
-
-// // Upload image for an item
-// router.patch("/:id/image",
-//     upload.single("image"),
-//     uploadErrorHandler,
-//     uploadToStorage,
-//     async (req, res, next) => {
-//       try {
-//         if (!req.file || !req.file.storageUrl) {
-//           return res.status(400).json({message: "No image uploaded"});
-//         }
-
-//         const item =
-//           await itemRepository.updateImage(req.params.id,
-//  req.file.storageUrl);
-//         if (!item) {
-//           return res.status(404).json({message: "Item not found"});
-//         }
-
-//         res.json(item);
-//       } catch (err) {
-//         next(err);
-//       }
-//     },
-// );
-
+/**
+ * Update item image
+ * PATCH /items/:id/image
+ */
 router.patch("/:id/image", async (req, res) => {
   try {
     const {id} = req.params;
@@ -153,7 +161,7 @@ router.patch("/:id/image", async (req, res) => {
     // Get the proper provider instances from your factory
     const providerFactory = getProviderFactory();
     const storageProvider = providerFactory.getStorageProvider();
-    const itemRepository = providerFactory.getItemRepository();
+    const itemRepository = getItemRepository();
 
     console.log("Uploading image for item:", id);
 
@@ -180,7 +188,17 @@ router.patch("/:id/image", async (req, res) => {
       return res.status(404).json({message: "Item not found"});
     }
 
-    res.json({imageUrl});
+    // Get relationships for response using the helper from factory
+    const relationships = await handlerFactory.getRelationshipsForEntity(
+        id,
+        "Item",
+    );
+
+    res.json({
+      ...updatedItem,
+      relationships,
+      imageUrl,
+    });
   } catch (error) {
     console.error("Error uploading image:", error);
     res.status(500).json({
@@ -190,104 +208,178 @@ router.patch("/:id/image", async (req, res) => {
   }
 });
 
-// Delete item
-router.delete("/:id", deleteItem);
-
-// Rebuild all item relationships
+/**
+ * Rebuild all item relationships using the new relationship system
+ * POST /items/rebuild-relationships
+ */
 router.post("/rebuild-relationships", async (req, res, next) => {
   try {
-    const result = await itemRepository.rebuildRelationships();
+    // Use the relationship repository for rebuilding with correct method
+    const relationshipRepository = getRelationshipRepository();
+    const result = await relationshipRepository.rebuildRelationships();
     res.json(result);
   } catch (err) {
     next(err);
   }
 });
 
-// Get item relationships
+/**
+ * Get item relationships using the relationship repository
+ * GET /items/:id/relationships
+ */
 router.get("/:id/relationships", async (req, res, next) => {
   try {
-    const relationships =
-      await itemRepository.getItemRelationships(req.params.id);
+    const relationships = await handlerFactory.getRelationshipsForEntity(
+        req.params.id,
+        "Item",
+    );
+
     res.json(relationships);
   } catch (err) {
     next(err);
   }
 });
 
-// NEW ENDPOINTS FOR INVENTORY BREAKDOWN
+/**
+ * Add product-material relationship
+ * POST /items/:productId/components/:materialId
+ */
+router.post("/:productId/components/:materialId", async (req, res, next) => {
+  try {
+    const {productId, materialId} = req.params;
+    const {measurements} = req.body;
+
+    if (!measurements) {
+      return res.status(400).json({
+        message: "Measurements are required (quantity, weight, etc.)",
+      });
+    }
+
+    const relationship = await addProductMaterialRelationship(
+        productId,
+        materialId,
+        measurements,
+    );
+
+    res.status(201).json(relationship);
+  } catch (err) {
+    console.error("Error adding product-material relationship:", err);
+    next(err);
+  }
+});
+
+// Get product components (materials)
+router.get("/:id/components", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const {populate = "false"} = req.query;
+
+    const components = await getProductComponents(id);
+
+    if (populate === "true") {
+      // If populate is requested, get the full item details for each component
+      const itemRepo = getProviderFactory().createItemRepository();
+      const populatedComponents = await Promise.all(
+          components.map(async (comp) => {
+            const material = await itemRepo.findById(comp.secondaryId);
+            return {
+              ...comp,
+              material,
+            };
+          }),
+      );
+      return res.json(populatedComponents);
+    }
+
+    res.json(components);
+  } catch (err) {
+    console.error(`Error fetching components for item ${req.params.id}:`, err);
+    next(err);
+  }
+});
+
+// Get products using a material
+router.get("/:id/used-in", async (req, res, next) => {
+  try {
+    const {id} = req.params;
+    const {populate = "false"} = req.query;
+
+    const products = await getProductsUsingMaterial(id);
+
+    if (populate === "true") {
+      // If populate is requested, get the full item details for each product
+      const itemRepo = getProviderFactory().createItemRepository();
+      const populatedProducts = await Promise.all(
+          products.map(async (prod) => {
+            const product = await itemRepo.findById(prod.primaryId);
+            return {
+              ...prod,
+              product,
+            };
+          }),
+      );
+      return res.json(populatedProducts);
+    }
+
+    res.json(products);
+  } catch (err) {
+    console.error(
+        `Error fetching products using material ${req.params.id}:`,
+        err,
+    );
+    next(err);
+  }
+});
 
 // Break down an item into derived items
 router.post("/:id/breakdown", async (req, res, next) => {
   try {
-    const sourceItemId = req.params.id;
+    const {id} = req.params;
     const {derivedItems} = req.body;
-
-    // Debug: Log the request parameters
-    console.log(`Creating breakdown items for source
-      ${sourceItemId} with ${derivedItems && derivedItems.length || 0} items`);
-
-    if (!sourceItemId) {
-      return res.status(400).json({message: "Source item ID is required"});
-    }
 
     if (!derivedItems || !Array.isArray(derivedItems) ||
         derivedItems.length === 0) {
-      return res.status(400).json({message: "Derived items are required"});
-    }
-
-    // Validate that each derived item has the necessary data
-    // based on whether it's new or existing
-    for (const item of derivedItems) {
-      if (item.itemId) {
-        // Existing item - must have valid measurement values
-        if (item.quantity === undefined &&
-            item.weight === undefined &&
-            item.length === undefined &&
-            item.area === undefined &&
-            item.volume === undefined) {
-          return res.status(400).json({
-            message: `Each allocation must include a valid measurement
-              value (quantity, weight, length, area, or volume)`,
-          });
-        }
-      } else {
-        // New item - must have name, sku and measurement values
-        if (!item.name || !item.sku) {
-          return res.status(400).json({
-            message: "Each new derived item must have a name and SKU",
-          });
-        }
-        if (item.quantity === undefined &&
-            item.weight === undefined &&
-            item.length === undefined &&
-            item.area === undefined &&
-            item.volume === undefined) {
-          return res.status(400).json({
-            message: `Each derived item must include a valid measurement
-              value (quantity, weight, length, area, or volume)`,
-          });
-        }
-      }
-    }
-
-    // Use transaction to ensure all operations succeed or fail together
-    const result = await withTransaction(async (transaction) => {
-      const itemRepo = getItemRepository();
-      return await itemRepo.createDerivedItems(sourceItemId,
-          derivedItems, transaction);
-    });
-
-    // Debug: Log the result
-    console.log(`Successfully created
-      ${result.derivedItems.length} derived items`);
-
-    // Check each derived item for proper derivedFrom
-    result.derivedItems.forEach((item, idx) => {
-      console.log(`Derived item ${idx + 1}: ${item._id}`, {
-        name: item.name,
-        hasDerivedFrom: !!item.derivedFrom,
-        derivedFromItem: item.derivedFrom && item.derivedFrom.item,
+      return res.status(400).json({
+        message: "Must provide an array of derived items",
       });
+    }
+
+    // Get source item
+    const itemRepository = getItemRepository();
+    const sourceItem = await itemRepository.findById(id);
+    if (!sourceItem) {
+      return res.status(404).json({message: "Source item not found"});
+    }
+
+    // Process with transaction
+    const result = await withTransaction(async (transaction) => {
+      const createdItems = [];
+
+      // Create each derived item and relationship
+      for (const derivedItemData of derivedItems) {
+        // Create the derived item without legacy derivedFrom property
+        const newItem = await itemRepository.create({
+          ...derivedItemData,
+          // Remove legacy derivedFrom field
+        }, transaction);
+
+        // Create the relationship using the new relationship system
+        await addDerivedItemRelationship(
+            newItem._id,
+            id,
+            derivedItemData.measurements || {quantity: 1},
+            transaction,
+        );
+
+        createdItems.push({
+          id: newItem._id,
+          name: newItem.name,
+          hasDerivedFrom: true,
+          derivedFromItem: sourceItem,
+        });
+      }
+
+      return createdItems;
     });
 
     res.json(result);
@@ -301,7 +393,20 @@ router.post("/:id/breakdown", async (req, res, next) => {
 router.get("/:id/derived", async (req, res, next) => {
   try {
     const sourceItemId = req.params.id;
-    const derivedItems = await itemRepository.getDerivedItems(sourceItemId);
+    const derivedRelationships = await getDerivedItems(sourceItemId);
+
+    // Get the actual item details for each derived item
+    const itemRepo = getProviderFactory().createItemRepository();
+    const derivedItems = await Promise.all(
+        derivedRelationships.map(async (rel) => {
+          const item = await itemRepo.findById(rel.primaryId);
+          return {
+            ...item,
+            relationship: rel,
+          };
+        }),
+    );
+
     res.json(derivedItems);
   } catch (err) {
     next(err);
@@ -312,42 +417,62 @@ router.get("/:id/derived", async (req, res, next) => {
 router.get("/:id/parent", async (req, res, next) => {
   try {
     const derivedItemId = req.params.id;
-    const parentItem = await itemRepository.getParentItem(derivedItemId);
+    const sourceRelationship = await getSourceForDerivedItem(derivedItemId);
 
-    if (!parentItem) {
+    if (!sourceRelationship) {
       return res.status(404).json({message: "Parent item not found"});
     }
 
-    res.json(parentItem);
+    // Get the actual source item
+    const itemRepo = getProviderFactory().createItemRepository();
+    const sourceItem = await itemRepo.findById(sourceRelationship.secondaryId);
+
+    if (!sourceItem) {
+      return res.status(404).json({message: "Parent item not found"});
+    }
+
+    res.json({
+      ...sourceItem,
+      relationship: sourceRelationship,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-// Rebuild item relationships (materials and products)
-router.post("/utility/rebuild-relationships", async (req, res, next) => {
+// Convert legacy item relationships to the new format
+router.post("/convert-relationships", async (req, res, next) => {
   try {
-    const {itemRepository} = req.providers;
-    const results = await rebuildRelationships(itemRepository);
-    res.json(results);
-  } catch (error) {
-    next(error);
+    const result = await convertAllRelationships();
+    res.json(result);
+  } catch (err) {
+    next(err);
   }
 });
 
-// NEW ENDPOINT: Rebuild inventory quantities, costs and prices
+// Convert a specific item's legacy relationships
+router.post("/:id/convert-relationships", async (req, res, next) => {
+  try {
+    const result = await convertItemRelationships(req.params.id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rebuild inventory quantities, costs and prices
 router.post("/utility/rebuild-inventory", async (req, res, next) => {
   try {
     // Set a longer timeout for the response
     req.setTimeout(120000); // 2 minutes
     res.setTimeout(120000); // 2 minutes
 
-    // Fix: Get providers directly from the factory instead of req.providers
+    // Get providers directly from the factory with the correct method names
     const providerFactory = getProviderFactory();
     const providers = {
-      itemRepository: providerFactory.getItemRepository(),
-      purchaseRepository: providerFactory.getPurchaseRepository(),
-      salesRepository: providerFactory.getSalesRepository(),
+      itemRepository: providerFactory.createItemRepository(),
+      purchaseRepository: providerFactory.createPurchaseRepository(),
+      salesRepository: providerFactory.createSalesRepository(),
     };
 
     // Process items in smaller batches to avoid timeouts
@@ -358,15 +483,15 @@ router.post("/utility/rebuild-inventory", async (req, res, next) => {
   }
 });
 
-// NEW ENDPOINT: Rebuild inventory for a specific item
+// Rebuild inventory for a specific item
 router.post("/utility/rebuild-inventory/:id", async (req, res, next) => {
   try {
-    // Fix: Get providers directly from the factory instead of req.providers
+    // Get providers directly from the factory with the correct method names
     const providerFactory = getProviderFactory();
     const providers = {
-      itemRepository: providerFactory.getItemRepository(),
-      purchaseRepository: providerFactory.getPurchaseRepository(),
-      salesRepository: providerFactory.getSalesRepository(),
+      itemRepository: providerFactory.createItemRepository(),
+      purchaseRepository: providerFactory.createPurchaseRepository(),
+      salesRepository: providerFactory.createSalesRepository(),
     };
 
     const result = await rebuildItemInventory(req.params.id, providers);

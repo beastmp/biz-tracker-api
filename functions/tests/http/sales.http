@@ -1,0 +1,99 @@
+/**
+ * HTTP test file for testing sale-related endpoints in the Biz-Tracker API.
+ * This file is designed to be used with the REST Client VS Code extension.
+ */
+
+### Variables
+@baseUrl = {{baseUrl}}
+@token = {{token}}
+
+##
+# Retrieves all sales
+# GET /sales endpoint returns a list of all sales transactions
+##
+GET {{baseUrl}}/sales
+Authorization: Bearer {{token}}
+
+/**
+ * Retrieves a specific sale by ID
+ * @param {string} sale_id - The unique identifier for the sale
+ */
+GET {{baseUrl}}/sales/sale_id_here
+Authorization: Bearer {{token}}
+
+/**
+ * Creates a new sale
+ * POST /sales endpoint with sale data in the request body
+ */
+POST {{baseUrl}}/sales
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "date": "2025-04-13",
+  "relationshipId": "customer_id_here",
+  "items": [
+    {
+      "itemId": "item_id_here",
+      "quantity": 3,
+      "unitPrice": 39.99
+    },
+    {
+      "itemId": "second_item_id_here",
+      "quantity": 1,
+      "unitPrice": 129.50
+    }
+  ],
+  "subtotal": 249.47,
+  "tax": 19.96,
+  "total": 269.43,
+  "paymentMethod": "credit",
+  "paymentStatus": "paid",
+  "notes": "Customer requested standard shipping",
+  "invoiceNumber": "INV-2025-04-13-042"
+}
+
+/**
+ * Updates an existing sale
+ * @param {string} sale_id - The unique identifier for the sale to update
+ */
+PUT {{baseUrl}}/sales/sale_id_here
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "paymentStatus": "paid",
+  "notes": "Payment received on April 13, 2025",
+  "shippingStatus": "shipped",
+  "trackingNumber": "UPS-1Z999AA10123456784"
+}
+
+/**
+ * Deletes a sale
+ * @param {string} sale_id - The unique identifier for the sale to delete
+ */
+DELETE {{baseUrl}}/sales/sale_id_here
+Authorization: Bearer {{token}}
+
+/**
+ * Filters sales by date range
+ * Uses query parameters to filter sales within a specific date range
+ */
+GET {{baseUrl}}/sales?startDate=2025-04-01&endDate=2025-04-13
+Authorization: Bearer {{token}}
+
+/**
+ * Retrieves sales by customer/relationship
+ * Filters sales by the specified relationship ID
+ * @param {string} relationship_id - The relationship/customer ID to filter by
+ */
+GET {{baseUrl}}/sales?relationshipId=customer_id_here
+Authorization: Bearer {{token}}
+
+/**
+ * Retrieves sales by payment status
+ * Filters sales by their payment status
+ * @param {string} status - The payment status to filter by (paid, pending, cancelled)
+ */
+GET {{baseUrl}}/sales?paymentStatus=paid
+Authorization: Bearer {{token}}

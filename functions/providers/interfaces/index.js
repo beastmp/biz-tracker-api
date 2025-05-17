@@ -1,17 +1,27 @@
-const ItemRepository = require("./itemRepository");
-const SalesRepository = require("./salesRepository");
-const PurchaseRepository = require("./purchaseRepository");
-const StorageProvider = require("./storageProvider");
-const TransactionProvider = require("./transactionProvider");
+/**
+ * Provider Interfaces Module
+ * Exports all provider interfaces for abstraction and dependency inversion
+ */
+
 const DatabaseProvider = require("./databaseProvider");
-const AssetRepository = require("./assetRepository");
+const ItemInterface = require("./itemInterface");
+const SaleInterface = require("./saleInterface");
+const PurchaseInterface = require("./purchaseInterface");
+const AssetInterface = require("./assetInterface");
+const RelationshipInterface = require("./relationshipInterface");
+const TransactionProvider = require("./transactionProvider");
+const StorageProvider = require("./storageProvider");
 
 module.exports = {
-  ItemRepository,
-  SalesRepository,
-  PurchaseRepository,
-  StorageProvider,
-  TransactionProvider,
+  // Database interfaces
   DatabaseProvider,
-  AssetRepository,
+  ItemInterface,
+  SaleInterface,
+  PurchaseInterface,
+  AssetInterface,
+  RelationshipInterface,
+  TransactionProvider,
+
+  // Storage interfaces
+  StorageProvider,
 };

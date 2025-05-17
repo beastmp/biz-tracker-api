@@ -1,6 +1,6 @@
 /**
- * @interface DatabaseProvider
- * Interface for database provider operations
+ * Database Provider Interface
+ * Defines the contract for all database providers
  */
 class DatabaseProvider {
   /**
@@ -8,7 +8,7 @@ class DatabaseProvider {
    * @return {Promise<void>}
    */
   async connect() {
-    throw new Error("Method not implemented");
+    throw new Error("Method 'connect' must be implemented");
   }
 
   /**
@@ -16,86 +16,70 @@ class DatabaseProvider {
    * @return {Promise<void>}
    */
   async disconnect() {
-    throw new Error("Method not implemented");
+    throw new Error("Method 'disconnect' must be implemented");
   }
 
   /**
-   * Check connection health
+   * Check database connection health
    * @return {Promise<Object>} Connection status object
    */
   async checkHealth() {
-    throw new Error("Method not implemented");
+    throw new Error("Method 'checkHealth' must be implemented");
   }
 
   /**
    * Create an item repository
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {Object} Item repository implementation
+   * @param {Object} options Configuration options
    */
-  createItemRepository() {
-    throw new Error("Method not implemented");
-  }
-
-  /**
-   * Create a sales repository
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {Object} Sales repository implementation
-   */
-  createSalesRepository() {
-    throw new Error("Method not implemented");
+  createItemRepository(options = {}) {
+    throw new Error("Method 'createItemRepository' must be implemented");
   }
 
   /**
    * Create a purchase repository
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {Object} Purchase repository implementation
+   * @param {Object} options Configuration options
    */
-  createPurchaseRepository() {
-    throw new Error("Method not implemented");
+  createPurchaseRepository(options = {}) {
+    throw new Error("Method 'createPurchaseRepository' must be implemented");
   }
 
   /**
-   * Create a transaction provider
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {Object} Transaction provider implementation
+   * Create a sales repository
+   * @param {Object} options Configuration options
    */
-  createTransactionProvider() {
-    throw new Error("Method not implemented");
+  createSalesRepository(options = {}) {
+    throw new Error("Method 'createSalesRepository' must be implemented");
   }
 
   /**
    * Create an asset repository
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {Object} Asset repository implementation
+   * @param {Object} options Configuration options
    */
-  createAssetRepository() {
-    throw new Error("Method not implemented");
+  createAssetRepository(options = {}) {
+    throw new Error("Method 'createAssetRepository' must be implemented");
   }
 
   /**
-   * Check if this provider supports a specific repository type
-   * @param {string} repositoryType - Type of repository to check
-   * @abstract
-   * @throws {Error} When method is not implemented
-  * @return {boolean} True if supported
+   * Create a relationship repository
+   * @param {Object} options Configuration options
    */
-  supportsRepository(repositoryType) {
-    throw new Error("Method not implemented");
+  createRelationshipRepository(options = {}) {
+    throw new Error("Method 'createRelationshipRepository' must be implemented");
+  }
+
+  /**
+   * Create a transaction provider
+   * @param {Object} options Configuration options
+   */
+  createTransactionProvider(options = {}) {
+    throw new Error("Method 'createTransactionProvider' must be implemented");
   }
 
   /**
    * Get the name of this provider implementation
-   * @abstract
-   * @throws {Error} When method is not implemented
-   * @return {string} Provider name/identifier
    */
   getProviderName() {
-    throw new Error("Method not implemented");
+    throw new Error("Method 'getProviderName' must be implemented");
   }
 }
 
