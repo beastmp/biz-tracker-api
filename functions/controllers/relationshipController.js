@@ -68,7 +68,7 @@ const withErrorHandling = (method, operation) => {
 };
 
 /**
- * Generic relationship controller with centralized operations
+ * Relationship controller with all methods
  */
 const relationshipController = {
   /**
@@ -875,6 +875,458 @@ const relationshipController = {
         throw new Error(`Repository not found for entity type: ${entityType}`);
     }
   },
+
+  /**
+   * Convert legacy relationships for a specific entity
+   * @param {string} entityId - ID of the entity
+   * @param {string} entityType - Type of entity (item, purchase, sale, asset)
+   * @return {Promise<Object>} Conversion result
+   */
+  async convertEntityRelationships(entityId, entityType) {
+    if (!entityId || !entityType) {
+      throw new ValidationError(
+          "Missing required parameters",
+          ["entityId", "entityType"]
+      );
+    }
+
+    // Normalize entity type to match our internal format
+    const normalizedType = entityType.charAt(0).toUpperCase() + entityType.slice(1).toLowerCase();
+    
+    // Get the appropriate repository for this entity type
+    const providerFactory = getProviderFactory();
+    const repository = this.getRepositoryForEntityType(providerFactory, normalizedType);
+
+    // Find the entity first to make sure it exists
+    const entity = await repository.findById(entityId);
+    if (!entity) {
+      throw new Error(`${normalizedType} with ID ${entityId} not found`);
+    }
+
+    console.log(`Converting relationships for ${normalizedType} ${entityId}`);
+
+    // Results tracking
+    const result = {
+      converted: 0,
+      errors: 0,
+      details: []
+    };
+
+    // Handle conversion based on entity type
+    return await withTransaction(async (transaction) => {
+      try {
+        switch (normalizedType) {
+          case "Item": {
+            // Convert product-material and derived item relationships
+            const legacyComponents = entity.components || [];
+            const legacyDerivedFrom = entity.derivedFrom;
+            
+            // Convert components (product materials)
+            for (const component of legacyComponents) {
+              try {
+                const relationship = await this.createProductMaterialRelationship(
+                    entityId,
+                    component.materialId,
+                    {
+                      quantity: component.quantity || 1,
+                      weight: component.weight
+                    },
+                    transaction
+                );
+                
+                result.converted++;
+                result.details.push({
+                  type: "component",
+                  materialId: component.materialId,
+                  success: true,
+                  relationship: relationship._id
+                });
+              } catch (error) {
+                console.error(`Error converting component ${component.materialId}:`, error);
+                result.errors++;
+                result.details.push({
+                  type: "component",
+                  materialId: component.materialId,
+                  success: false,
+                  error: error.message
+                });
+              }
+            }
+            
+            // Convert derived-from relationship
+            if (legacyDerivedFrom && legacyDerivedFrom.itemId) {
+              try {
+                const relationship = await this.createDerivedItemRelationship(
+                    entityId,
+                    legacyDerivedFrom.itemId,
+                    {
+                      quantity: legacyDerivedFrom.quantity || 1,
+                      conversionRatio: legacyDerivedFrom.conversionRatio
+                    },
+                    transaction
+                );
+                
+                result.converted++;
+                result.details.push({
+                  type: "derivedFrom",
+                  sourceItemId: legacyDerivedFrom.itemId,
+                  success: true,
+                  relationship: relationship._id
+                });
+              } catch (error) {
+                console.error(`Error converting derivedFrom ${legacyDerivedFrom.itemId}:`, error);
+                result.errors++;
+                result.details.push({
+                  type: "derivedFrom",
+                  sourceItemId: legacyDerivedFrom.itemId,
+                  success: false,
+                  error: error.message
+                });
+              }
+            }
+            break;
+          }
+          
+          case "Purchase": {
+            // Convert purchase items and assets
+            const legacyItems = entity.items || [];
+            const legacyAssets = entity.assets || [];
+            
+            // Convert purchase items
+            for (const item of legacyItems) {
+              if (!item.itemId) continue;
+              
+              try {
+                const relationship = await this.createPurchaseItemRelationship(
+                    entityId,
+                    item.itemId,
+                    {
+                      quantity: item.quantity || 1,
+                      weight: item.weight
+                    },
+                    {
+                      purchaseDate: entity.purchaseDate,
+                      unitPrice: item.unitPrice,
+                      totalPrice: item.totalPrice,
+                      purchaseType: item.purchaseType || "inventory"
+                    },
+                    transaction
+                );
+                
+                result.converted++;
+                result.details.push({
+                  type: "purchaseItem",
+                  itemId: item.itemId,
+                  success: true,
+                  relationship: relationship._id
+                });
+              } catch (error) {
+                console.error(`Error converting purchase item ${item.itemId}:`, error);
+                result.errors++;
+                result.details.push({
+                  type: "purchaseItem",
+                  itemId: item.itemId,
+                  success: false,
+                  error: error.message
+                });
+              }
+            }
+            
+            // Convert purchase assets
+            for (const asset of legacyAssets) {
+              if (!asset.assetId) continue;
+              
+              try {
+                const relationship = await this.createPurchaseAssetRelationship(
+                    entityId,
+                    asset.assetId,
+                    {
+                      purchaseDate: entity.purchaseDate,
+                      purchasePrice: asset.purchasePrice
+                    },
+                    transaction
+                );
+                
+                result.converted++;
+                result.details.push({
+                  type: "purchaseAsset",
+                  assetId: asset.assetId,
+                  success: true,
+                  relationship: relationship._id
+                });
+              } catch (error) {
+                console.error(`Error converting purchase asset ${asset.assetId}:`, error);
+                result.errors++;
+                result.details.push({
+                  type: "purchaseAsset",
+                  assetId: asset.assetId,
+                  success: false,
+                  error: error.message
+                });
+              }
+            }
+            break;
+          }
+          
+          case "Sale": {
+            // Convert sale items
+            const legacyItems = entity.items || [];
+            
+            for (const item of legacyItems) {
+              if (!item.itemId) continue;
+              
+              try {
+                const relationship = await this.createSaleItemRelationship(
+                    entityId,
+                    item.itemId,
+                    {
+                      quantity: item.quantity || 1,
+                      weight: item.weight
+                    },
+                    {
+                      saleDate: entity.saleDate,
+                      unitPrice: item.unitPrice,
+                      totalPrice: item.totalPrice,
+                      discountAmount: item.discountAmount || 0
+                    },
+                    transaction
+                );
+                
+                result.converted++;
+                result.details.push({
+                  type: "saleItem",
+                  itemId: item.itemId,
+                  success: true,
+                  relationship: relationship._id
+                });
+              } catch (error) {
+                console.error(`Error converting sale item ${item.itemId}:`, error);
+                result.errors++;
+                result.details.push({
+                  type: "saleItem",
+                  itemId: item.itemId,
+                  success: false,
+                  error: error.message
+                });
+              }
+            }
+            break;
+          }
+          
+          case "Asset":
+            // No relationships to convert for assets currently
+            result.details.push({
+              type: "info",
+              message: "No relationships to convert for assets"
+            });
+            break;
+            
+          default:
+            throw new Error(`Unsupported entity type for conversion: ${normalizedType}`);
+        }
+        
+        // Mark the entity as having converted relationships
+        await repository.update(
+            entityId,
+            { 
+              relationshipsConverted: true,
+              updatedAt: new Date()
+            },
+            transaction
+        );
+        
+        return result;
+      } catch (error) {
+        console.error(`Error in relationship conversion for ${normalizedType} ${entityId}:`, error);
+        throw error;
+      }
+    });
+  },
+
+  /**
+   * Convert all relationships for a specific entity type
+   * @param {string} entityType - Type of entity (item, purchase, sale, asset)
+   * @return {Promise<Object>} Conversion result with statistics
+   */
+  async convertAllEntityTypeRelationships(entityType) {
+    // Normalize entity type to match our internal format
+    const normalizedType = entityType.charAt(0).toUpperCase() + entityType.slice(1).toLowerCase();
+    
+    // Get the appropriate repository for this entity type
+    const providerFactory = getProviderFactory();
+    const repository = this.getRepositoryForEntityType(providerFactory, normalizedType);
+    
+    // Get all entities of this type
+    const entities = await repository.findByFilter({});
+    
+    console.log(`Found ${entities.length} ${normalizedType} entities to process`);
+    
+    // Results tracking
+    const result = {
+      total: entities.length,
+      processed: 0,
+      converted: 0,
+      errors: 0,
+      details: []
+    };
+    
+    // Process each entity
+    for (const entity of entities) {
+      try {
+        const entityResult = await this.convertEntityRelationships(
+            entity._id,
+            normalizedType
+        );
+        
+        result.processed++;
+        result.converted += entityResult.converted;
+        result.errors += entityResult.errors;
+        
+        // Only add detailed results for entities with conversions or errors
+        if (entityResult.converted > 0 || entityResult.errors > 0) {
+          result.details.push({
+            entityId: entity._id,
+            entityType: normalizedType,
+            converted: entityResult.converted,
+            errors: entityResult.errors
+          });
+        }
+        
+        // Log progress periodically
+        if (result.processed % 10 === 0 || result.processed === result.total) {
+          console.log(`Processed ${result.processed}/${result.total} ${normalizedType} entities`);
+        }
+      } catch (error) {
+        console.error(`Error processing ${normalizedType} ${entity._id}:`, error);
+        result.processed++;
+        result.errors++;
+        result.details.push({
+          entityId: entity._id,
+          entityType: normalizedType,
+          error: error.message
+        });
+      }
+    }
+    
+    console.log(`Completed conversion for ${normalizedType}: ${result.converted} relationships converted, ${result.errors} errors`);
+    
+    return result;
+  },
+
+  /**
+   * Convert all relationships asynchronously as a background job
+   * @param {string} jobId - Job ID for tracking progress
+   * @return {Promise<void>}
+   */
+  async convertAllRelationshipsAsync(jobId) {
+    try {
+      console.log(`Starting async conversion job ${jobId}`);
+      
+      // Get provider for job status updates
+      const providerFactory = getProviderFactory();
+      const cacheProvider = providerFactory.getCacheProvider();
+      
+      // Update job status function
+      const updateJobStatus = async (phase, status, progress, error = null) => {
+        const now = new Date().toISOString();
+        const jobStatus = {
+          jobId,
+          status,
+          startTime: (await cacheProvider.get(`job:${jobId}`)).startTime || now,
+          lastUpdated: now,
+          progress: {
+            ...progress,
+            currentPhase: phase,
+            percentComplete: Math.floor((progress.totalConverted / Math.max(1, progress.totalConverted + progress.remainingToProcess)) * 100)
+          }
+        };
+        
+        if (status === "completed" || status === "failed") {
+          jobStatus.endTime = now;
+        }
+        
+        if (error) {
+          jobStatus.error = error;
+        }
+        
+        await cacheProvider.set(`job:${jobId}`, JSON.stringify(jobStatus));
+      };
+      
+      // Entity types to process
+      const entityTypes = ["item", "purchase", "sale", "asset"];
+      
+      // Initialize progress tracking
+      const progress = {
+        items: { converted: 0, errors: 0 },
+        purchases: { converted: 0, errors: 0 },
+        sales: { converted: 0, errors: 0 },
+        assets: { converted: 0, errors: 0 },
+        totalConverted: 0,
+        totalErrors: 0,
+        remainingToProcess: Number.MAX_SAFE_INTEGER, // Will be updated in first phase
+        currentPhase: "starting",
+        percentComplete: 0
+      };
+      
+      // Process each entity type
+      for (let i = 0; i < entityTypes.length; i++) {
+        const entityType = entityTypes[i];
+        const phase = `${entityType}s (${i + 1}/${entityTypes.length})`;
+        
+        try {
+          console.log(`Starting conversion for ${entityType}s`);
+          await updateJobStatus(phase, "running", progress);
+          
+          // Convert all relationships for this entity type
+          const result = await this.convertAllEntityTypeRelationships(entityType);
+          
+          // Update progress
+          progress[`${entityType}s`] = {
+            converted: result.converted,
+            errors: result.errors
+          };
+          
+          progress.totalConverted += result.converted;
+          progress.totalErrors += result.errors;
+          progress.remainingToProcess = entityTypes.slice(i + 1).length * result.total;
+          
+          await updateJobStatus(phase, "running", progress);
+          
+          console.log(`Completed ${entityType}s phase: ${result.converted} converted, ${result.errors} errors`);
+        } catch (error) {
+          console.error(`Error in ${phase} phase:`, error);
+          progress.totalErrors++;
+          await updateJobStatus(phase, "running", progress, error.message);
+        }
+      }
+      
+      // Job completed
+      progress.percentComplete = 100;
+      progress.currentPhase = "completed";
+      await updateJobStatus("completed", "completed", progress);
+      
+      console.log(`Conversion job ${jobId} completed: ${progress.totalConverted} relationships converted, ${progress.totalErrors} errors`);
+    } catch (error) {
+      console.error(`Fatal error in conversion job ${jobId}:`, error);
+      
+      // Update job status to failed
+      try {
+        const providerFactory = getProviderFactory();
+        const cacheProvider = providerFactory.getCacheProvider();
+        const jobStatusJson = await cacheProvider.get(`job:${jobId}`);
+        const jobStatus = JSON.parse(jobStatusJson);
+        
+        jobStatus.status = "failed";
+        jobStatus.endTime = new Date().toISOString();
+        jobStatus.lastUpdated = new Date().toISOString();
+        jobStatus.error = error.message;
+        
+        await cacheProvider.set(`job:${jobId}`, JSON.stringify(jobStatus));
+      } catch (cacheError) {
+        console.error(`Failed to update job status for ${jobId}:`, cacheError);
+      }
+    }
+  }
 };
 
 // Create a wrapped version of the controller with error handling

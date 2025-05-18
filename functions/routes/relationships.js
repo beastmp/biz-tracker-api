@@ -352,4 +352,129 @@ router.delete("/", async (req, res, next) => {
   }
 });
 
+/**
+ * POST /relationships/convert/:entityType/:entityId
+ * Convert legacy relationships for a specific entity
+ */
+router.post("/convert/:entityType/:entityId", async (req, res, next) => {
+  try {
+    const { entityType, entityId } = req.params;
+    
+    if (!entityType || !entityId) {
+      return res.status(400).json({
+        success: false,
+        message: "Entity type and ID are required"
+      });
+    }
+    
+    // Validate entity type is one of the supported types
+    const validEntityTypes = ["item", "purchase", "sale", "asset"];
+    if (!validEntityTypes.includes(entityType.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid entity type: ${entityType}. Must be one of: ${validEntityTypes.join(", ")}`
+      });
+    }
+    
+    console.log(`Converting relationships for ${entityType} ${entityId}`);
+    
+    // Implementation depends on your relationship controller
+    // This is a placeholder for the actual implementation
+    const result = await relationshipController.convertEntityRelationships(
+      entityId,
+      entityType
+    );
+    
+    res.json({
+      success: true,
+      message: `Converted relationships for ${entityType} ${entityId}`,
+      result
+    });
+  } catch (err) {
+    console.error(`Error converting relationships for entity:`, err);
+    next(err);
+  }
+});
+
+/**
+ * POST /relationships/convert-all
+ * Convert all legacy relationships in the system
+ */
+router.post("/convert-all", async (req, res, next) => {
+  try {
+    // Start a background job for conversion
+    const jobId = `rel_convert_${Date.now()}`;
+    
+    // Store initial job status
+    const initialStatus = {
+      jobId,
+      status: "running",
+      startTime: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      progress: {
+        items: { converted: 0, errors: 0 },
+        purchases: { converted: 0, errors: 0 },
+        sales: { converted: 0, errors: 0 },
+        assets: { converted: 0, errors: 0 },
+        totalConverted: 0,
+        totalErrors: 0,
+        currentPhase: "starting",
+        percentComplete: 0
+      }
+    };
+    
+    // Store job status in your database or cache
+    // This implementation depends on your specific storage solution
+    // For example, using the provider factory:
+    const providerFactory = getProviderFactory();
+    const cacheProvider = providerFactory.getCacheProvider();
+    await cacheProvider.set(`job:${jobId}`, JSON.stringify(initialStatus));
+    
+    // Start the actual conversion process in the background
+    // This would typically be implemented with a queue system
+    // For simplicity, we're using a promise without awaiting
+    relationshipController.convertAllRelationshipsAsync(jobId).catch(error => {
+      console.error("Background conversion job failed:", error);
+    });
+    
+    res.json({
+      success: true,
+      message: "Relationship conversion job started",
+      jobId
+    });
+  } catch (err) {
+    console.error("Error starting conversion job:", err);
+    next(err);
+  }
+});
+
+/**
+ * GET /relationships/jobs/:jobId
+ * Get status of a conversion job
+ */
+router.get("/jobs/:jobId", async (req, res, next) => {
+  try {
+    const { jobId } = req.params;
+    
+    // Get job status from your storage
+    const providerFactory = getProviderFactory();
+    const cacheProvider = providerFactory.getCacheProvider();
+    const jobStatusJson = await cacheProvider.get(`job:${jobId}`);
+    
+    if (!jobStatusJson) {
+      return res.status(404).json({
+        success: false,
+        message: `Job with ID ${jobId} not found`
+      });
+    }
+    
+    const jobStatus = JSON.parse(jobStatusJson);
+    
+    res.json(jobStatus);
+  } catch (err) {
+    console.error("Error fetching job status:", err);
+    next(err);
+  }
+});
+
 module.exports = router;
