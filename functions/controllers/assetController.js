@@ -5,6 +5,7 @@
 
 const assetService = require("../services/assetService");
 const { AppError, ValidationError } = require("../validation/errors");
+const { normalizeData } = require("../utils/dataUtils");
 
 /**
  * Wrap controller methods with standard error handling
@@ -81,7 +82,7 @@ const assetController = {
     res.status(200).json({
       status: "success",
       results: assets.length,
-      data: assets
+      data: normalizeData(assets)
     });
   },
   
@@ -101,7 +102,7 @@ const assetController = {
     
     res.status(200).json({
       status: "success",
-      data: asset
+      data: normalizeData(asset)
     });
   },
   
@@ -117,7 +118,7 @@ const assetController = {
     
     res.status(201).json({
       status: "success",
-      data: asset
+      data: normalizeData(asset)
     });
   },
   
@@ -137,7 +138,7 @@ const assetController = {
     
     res.status(200).json({
       status: "success",
-      data: asset
+      data: normalizeData(asset)
     });
   },
   
@@ -201,7 +202,7 @@ const assetController = {
     
     res.status(200).json({
       status: "success",
-      data: asset
+      data: normalizeData(asset)
     });
   },
   
@@ -250,7 +251,7 @@ const assetController = {
     res.status(200).json({
       status: "success",
       results: assets.length,
-      data: assets
+      data: normalizeData(assets)
     });
   }
 };

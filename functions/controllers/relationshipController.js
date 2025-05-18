@@ -5,6 +5,7 @@
 
 const relationshipService = require("../services/relationshipService");
 const { AppError, ValidationError } = require("../validation/errors");
+const { normalizeData } = require("../utils/dataUtils");
 
 /**
  * Wrap controller methods with standard error handling
@@ -81,7 +82,7 @@ const relationshipController = {
     res.status(200).json({
       status: "success",
       results: relationships.length,
-      data: relationships
+      data: normalizeData(relationships)
     });
   },
   
@@ -101,7 +102,7 @@ const relationshipController = {
     
     res.status(200).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -139,7 +140,7 @@ const relationshipController = {
     res.status(200).json({
       status: "success",
       results: relationships.length,
-      data: relationships
+      data: normalizeData(relationships)
     });
   },
   
@@ -177,7 +178,7 @@ const relationshipController = {
     res.status(200).json({
       status: "success",
       results: relationships.length,
-      data: relationships
+      data: normalizeData(relationships)
     });
   },
   
@@ -193,7 +194,7 @@ const relationshipController = {
     
     res.status(201).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -216,7 +217,7 @@ const relationshipController = {
     
     res.status(200).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -296,7 +297,7 @@ const relationshipController = {
     
     res.status(201).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -326,7 +327,7 @@ const relationshipController = {
     
     res.status(201).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -356,7 +357,7 @@ const relationshipController = {
     
     res.status(201).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   
@@ -386,7 +387,7 @@ const relationshipController = {
     
     res.status(201).json({
       status: "success",
-      data: relationship
+      data: normalizeData(relationship)
     });
   },
   

@@ -5,6 +5,7 @@
 
 const itemService = require("../services/itemService");
 const { AppError, ValidationError } = require("../validation/errors");
+const { normalizeData } = require("../utils/dataUtils");
 
 /**
  * Wrap controller methods with standard error handling
@@ -81,7 +82,7 @@ const itemController = {
     res.status(200).json({
       status: "success",
       results: items.length,
-      data: items
+      data: normalizeData(items)
     });
   },
   
@@ -101,7 +102,7 @@ const itemController = {
     
     res.status(200).json({
       status: "success",
-      data: item
+      data: normalizeData(item)
     });
   },
   
@@ -127,7 +128,7 @@ const itemController = {
     
     res.status(200).json({
       status: "success",
-      data: item
+      data: normalizeData(item)
     });
   },
   
@@ -143,7 +144,7 @@ const itemController = {
     
     res.status(201).json({
       status: "success",
-      data: item
+      data: normalizeData(item)
     });
   },
   
@@ -163,7 +164,7 @@ const itemController = {
     
     res.status(200).json({
       status: "success",
-      data: item
+      data: normalizeData(item)
     });
   },
   
@@ -209,7 +210,7 @@ const itemController = {
     
     res.status(200).json({
       status: "success",
-      data: item
+      data: normalizeData(item)
     });
   },
   
@@ -260,7 +261,7 @@ const itemController = {
     res.status(200).json({
       status: "success",
       results: items.length,
-      data: items
+      data: normalizeData(items)
     });
   },
   
@@ -276,7 +277,7 @@ const itemController = {
     
     res.status(200).json({
       status: "success",
-      data: inventoryByCategory
+      data: normalizeData(inventoryByCategory)
     });
   }
 };

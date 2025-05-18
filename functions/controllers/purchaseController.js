@@ -5,6 +5,7 @@
 
 const purchaseService = require("../services/purchaseService");
 const { AppError, ValidationError } = require("../validation/errors");
+const { normalizeData } = require("../utils/dataUtils");
 
 /**
  * Wrap controller methods with standard error handling
@@ -81,7 +82,7 @@ const purchaseController = {
     res.status(200).json({
       status: "success",
       results: purchases.length,
-      data: purchases
+      data: normalizeData(purchases)
     });
   },
   
@@ -101,7 +102,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -127,7 +128,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -143,7 +144,7 @@ const purchaseController = {
     
     res.status(201).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -163,7 +164,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -199,7 +200,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -225,7 +226,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -241,7 +242,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -259,7 +260,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -290,7 +291,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: purchase
+      data: normalizeData(purchase)
     });
   },
   
@@ -310,7 +311,7 @@ const purchaseController = {
     
     res.status(200).json({
       status: "success",
-      data: stats
+      data: normalizeData(stats)
     });
   }
 };

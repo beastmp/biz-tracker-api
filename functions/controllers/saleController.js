@@ -5,6 +5,7 @@
 
 const saleService = require("../services/saleService");
 const { AppError, ValidationError } = require("../validation/errors");
+const { normalizeData } = require("../utils/dataUtils");
 
 /**
  * Wrap controller methods with standard error handling
@@ -81,7 +82,7 @@ const saleController = {
     res.status(200).json({
       status: "success",
       results: sales.length,
-      data: sales
+      data: normalizeData(sales)
     });
   },
   
@@ -101,7 +102,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -127,7 +128,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -143,7 +144,7 @@ const saleController = {
     
     res.status(201).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -163,7 +164,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -199,7 +200,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -226,7 +227,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -242,7 +243,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -260,7 +261,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -291,7 +292,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -322,7 +323,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -352,7 +353,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: sale
+      data: normalizeData(sale)
     });
   },
   
@@ -372,7 +373,7 @@ const saleController = {
     
     res.status(200).json({
       status: "success",
-      data: stats
+      data: normalizeData(stats)
     });
   }
 };
