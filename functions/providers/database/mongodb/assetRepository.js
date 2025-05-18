@@ -5,7 +5,7 @@
 
 const mongoose = require("mongoose");
 const AssetRepository = require("../../repositories/assetRepository");
-const {getModel} = require("./modelFactory");
+const { createModel } = require("./modelFactory");
 
 /**
  * MongoDB-specific implementation of the Asset repository
@@ -17,8 +17,8 @@ class MongoDBAssetRepository extends AssetRepository {
    */
   constructor(config = {}) {
     super(config);
-    this.model = getModel("Asset");
     this.collectionPrefix = config.collectionPrefix || "";
+    this.model = createModel("Asset", this.collectionPrefix);
   }
 
   /**

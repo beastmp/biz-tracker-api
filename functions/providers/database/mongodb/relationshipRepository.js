@@ -522,6 +522,33 @@ class MongoDBRelationshipRepository extends RelationshipRepository {
 
     return query;
   }
+
+  /**
+   * Sets all entity repositories at once
+   *
+   * @param {Object} itemRepository - Item repository instance
+   * @param {Object} purchaseRepository - Purchase repository instance
+   * @param {Object} salesRepository - Sales repository instance
+   * @param {Object} assetRepository - Asset repository instance
+   * @return {void}
+   */
+  setRepositories(itemRepository, purchaseRepository, salesRepository, assetRepository) {
+    if (itemRepository) {
+      this.registerEntityRepository("Item", itemRepository);
+    }
+    
+    if (purchaseRepository) {
+      this.registerEntityRepository("Purchase", purchaseRepository);
+    }
+    
+    if (salesRepository) {
+      this.registerEntityRepository("Sale", salesRepository);
+    }
+    
+    if (assetRepository) {
+      this.registerEntityRepository("Asset", assetRepository);
+    }
+  }
 }
 
 module.exports = MongoDBRelationshipRepository;
