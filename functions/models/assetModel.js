@@ -318,7 +318,12 @@ class Asset extends BaseModel {
   }
 }
 
+// Export the model definition with the fields property expected by schemaGenerator
 module.exports = {
+  fields: assetModel.fields,
+  indexes: assetModel.indexes,
+  timestamps: assetModel.timestamps,
+  textSearchFields: ["name", "notes", "tags", "serialNumber", "assetTag"],
   assetModel,
   Asset,
 };

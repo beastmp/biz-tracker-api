@@ -729,7 +729,14 @@ class Sale extends BaseModel {
   }
 }
 
+/**
+ * Export the model definition with the fields property expected by schemaGenerator
+ */
 module.exports = {
+  fields: saleModel.fields,
+  indexes: saleModel.indexes,
+  timestamps: saleModel.timestamps,
+  textSearchFields: ["saleNumber", "customer", "notes", "tags"],
   saleModel,
   Sale,
 };

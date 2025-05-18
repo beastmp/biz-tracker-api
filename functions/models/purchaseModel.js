@@ -449,7 +449,14 @@ class Purchase extends BaseModel {
   }
 }
 
+/**
+ * Export the model definition with the fields property expected by schemaGenerator
+ */
 module.exports = {
+  fields: purchaseModel.fields,
+  indexes: purchaseModel.indexes,
+  timestamps: purchaseModel.timestamps,
+  textSearchFields: ["purchaseNumber", "supplier", "notes", "tags"],
   purchaseModel,
   Purchase,
 };
