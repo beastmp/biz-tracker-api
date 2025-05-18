@@ -45,76 +45,48 @@ app.get("/", (req, res) => {
 let isInitialized = false;
 let initializationPromise = null;
 
-// Function to setup the application
+/**
+ * Sets up the application by initializing providers and routes
+ * Uses a promise caching mechanism to prevent multiple initializations
+ * 
+ * @returns {Promise<boolean>} A promise that resolves when initialization is complete
+ */
 const setupApp = async () => {
-  try {
-    // Initialize providers first
-    await initializeProviders();
-    console.log("✅ All providers initialized successfully");
-
-    app.use((req, res, next) => {
-      console.log(`Incoming request: ${req.method} ${req.originalUrl}`);
-      next();
-    });
-
-    // Import routes after provider initialization
-    const assetsRoutes = require("./routes/assets");
-    const itemsRoutes = require("./routes/items");
-    const purchasesRoutes = require("./routes/purchases");
-    const salesRoutes = require("./routes/sales");
-    const relationshipsRoutes = require("./routes/relationships");
-
-    const healthRoutes = require("./routes/health");
-
-    // Routes - notice we're NOT using /api prefix here
-    app.use("/assets", assetsRoutes);
-    app.use("/items", itemsRoutes);
-    app.use("/purchases", purchasesRoutes);
-    app.use("/sales", salesRoutes);
-    app.use("/relationships", relationshipsRoutes);
-
-    app.use("/health", healthRoutes);
-
-    // Error handler
-    app.use(errorHandler);
-
-    console.log("Application setup complete");
-
-    // Start the server if running directly
-    if (require.main === module) {
-      const PORT = process.env.PORT || 3000;
-      app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-      });
-    }
-  } catch (error) {
-    console.error("Failed to initialize application:", error);
-    throw error;
-  }
-  
+  // Return existing promise if initialization is in progress
   if (initializationPromise) {
     return initializationPromise;
   }
 
+  // Create and cache the initialization promise
   initializationPromise = (async () => {
     try {
+      console.log("Starting application initialization...");
+      
       // Initialize providers first
       await initializeProviders();
       console.log("✅ All providers initialized successfully");
 
-      // Import routes after provider initialization
-      const salesRoutes = require("./routes/sales");
-      const purchasesRoutes = require("./routes/purchases");
-      const itemsRoutes = require("./routes/items");
-      const healthRoutes = require("./routes/health");
-      const assetsRoutes = require("./routes/assets"); 
+      // Add request logging middleware
+      app.use((req, res, next) => {
+        console.log(`Incoming request: ${req.method} ${req.originalUrl}`);
+        next();
+      });
 
-      // Routes
-      app.use("/api/sales", salesRoutes);
-      app.use("/api/purchases", purchasesRoutes);
-      app.use("/api/items", itemsRoutes);
-      app.use("/api/health", healthRoutes);
-      app.use("/api/assets", assetsRoutes); 
+      // Import routes after provider initialization
+      const assetsRoutes = require("./routes/assets");
+      const itemsRoutes = require("./routes/items");
+      const purchasesRoutes = require("./routes/purchases");
+      const salesRoutes = require("./routes/sales");
+      const relationshipsRoutes = require("./routes/relationships");
+      const healthRoutes = require("./routes/health");
+
+      // Routes - we're using consistent path patterns (no /api prefix)
+      app.use("/assets", assetsRoutes);
+      app.use("/items", itemsRoutes);
+      app.use("/purchases", purchasesRoutes);
+      app.use("/sales", salesRoutes);
+      app.use("/relationships", relationshipsRoutes);
+      app.use("/health", healthRoutes);
 
       // Error handler
       app.use(errorHandler);
@@ -146,7 +118,10 @@ if (require.main === module) {
   });
 }
 
-// Export the Express app as a Firebase Cloud Function with lazy initialization
+/**
+ * Firebase Cloud Function entry point with lazy initialization
+ * Uses a cached initialization promise to prevent timeouts
+ */
 exports.api = functions.https.onRequest(async (req, res) => {
   try {
     // Initialize the app on first request
