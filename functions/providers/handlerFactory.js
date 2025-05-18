@@ -9,10 +9,12 @@
  * @requires ./providerFactory
  * @requires ../validation/errors
  * @requires ../controllers/relationshipController
+ * @requires ../utils/dataUtils
  */
 const providerFactory = require("./providerFactory");
 const {NotFoundError} = require("../validation/errors");
 const relationshipController = require("../controllers/relationshipController");
+const {normalizeData} = require("../utils/dataUtils");
 
 /**
  * Retrieves the appropriate repository instance for a given model type
@@ -88,7 +90,8 @@ const handlerFactory = {
       const repository = getRepositoryForModel(modelName);
       const documents = await repository.findAll(filter);
 
-      res.json(documents);
+      // Normalize data before sending response
+      res.json(normalizeData(documents));
     } catch (err) {
       next(err);
     }
@@ -126,7 +129,8 @@ const handlerFactory = {
           }),
       );
 
-      res.json(docsWithRelationships);
+      // Normalize data before sending response
+      res.json(normalizeData(docsWithRelationships));
     } catch (err) {
       next(err);
     }
@@ -153,7 +157,8 @@ const handlerFactory = {
         });
       }
 
-      res.json(doc);
+      // Normalize data before sending response
+      res.json(normalizeData(doc));
     } catch (err) {
       next(err);
     }
@@ -183,10 +188,11 @@ const handlerFactory = {
       // Get relationships for the document
       const relationships = await getRelationshipsForEntity(id, modelName);
 
-      res.json({
+      // Normalize data before sending response
+      res.json(normalizeData({
         ...doc,
         relationships,
-      });
+      }));
     } catch (err) {
       next(err);
     }
@@ -203,7 +209,8 @@ const handlerFactory = {
       const repository = getRepositoryForModel(modelName);
       const document = await repository.create(req.body);
 
-      res.status(201).json(document);
+      // Normalize data before sending response
+      res.status(201).json(normalizeData(document));
     } catch (err) {
       next(err);
     }
@@ -223,10 +230,11 @@ const handlerFactory = {
           req.body,
       );
 
-      res.status(201).json({
+      // Normalize data before sending response
+      res.status(201).json(normalizeData({
         ...result.entity,
         relationships: result.relationships,
-      });
+      }));
     } catch (err) {
       next(err);
     }
@@ -248,7 +256,8 @@ const handlerFactory = {
         return next(new NotFoundError(entityName, req.params.id));
       }
 
-      res.json(document);
+      // Normalize data before sending response
+      res.json(normalizeData(document));
     } catch (err) {
       next(err);
     }
@@ -271,10 +280,11 @@ const handlerFactory = {
           req.body,
       );
 
-      res.json({
+      // Normalize data before sending response
+      res.json(normalizeData({
         ...result.entity,
         relationships: result.relationships,
-      });
+      }));
     } catch (err) {
       // If the entity was not found, create a proper error
       if (err.message && err.message.includes("not found")) {

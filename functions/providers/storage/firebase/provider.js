@@ -55,9 +55,9 @@ class FirebaseStorageProvider {
 
       if (!this.initialized) {
         // Basic initialization
-        if (LOG_LEVEL > 0) {
-          console.log(`[${instanceId}] 🔄 Initializing Firebase Storage provider...`);
-        }
+        // if (LOG_LEVEL > 0) {
+        //   console.log(`[${instanceId}] 🔄 Initializing Firebase Storage provider...`);
+        // }
 
         // Setup the Firebase admin app if not already initialized
         await this.setupAdminApp(instanceId);
