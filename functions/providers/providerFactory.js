@@ -56,37 +56,88 @@ class ProviderFactory {
   }
 
   /**
-   * Initializes all providers
+   * Initializes all providers including database and storage
    *
    * @async
    * @param {Object} [customConfig=null] - Optional custom configuration
+   * @param {string} [instanceId="main"] - Instance identifier for logging
    * @return {Promise<ProviderFactory>} This factory instance
    */
-  async initializeProviders(customConfig = null) {
+  async initializeProviders(customConfig = null, instanceId = "main") {
     // Initialize the factory configuration
     this.initialize(customConfig);
 
-    // Initialize the default database provider
+    // Initialize database provider
+    await this.initializeDatabaseProvider(instanceId);
+    
+    // Initialize storage provider
+    await this.initializeStorageProvider(instanceId);
+
+    return this;
+  }
+  
+  /**
+   * Initializes the database provider
+   *
+   * @async
+   * @param {string} [instanceId="main"] - Instance identifier for logging
+   * @return {Promise<Object>} The initialized database provider
+   */
+  async initializeDatabaseProvider(instanceId = "main") {
+    // Get the configured database provider ID
     const dbProviderId = (this.config.database && this.config.database.provider) || "mongodb";
     const dbProvider = this.getProvider("database", dbProviderId);
 
     // If the provider has an initialize method, call it
     if (dbProvider && typeof dbProvider.initialize === "function") {
-      console.log(`🔄 Initializing database provider: ${dbProviderId}...`);
-      await dbProvider.initialize(this.config.database);
-      console.log(`✅ Database provider ${dbProviderId} initialized successfully`);
+      console.log(`[${instanceId}] 🔄 Initializing database provider: ${dbProviderId}...`);
+      await dbProvider.initialize(this.config.database, instanceId);
+      console.log(`[${instanceId}] ✅ Database provider ${dbProviderId} initialized successfully`);
     } else {
-      console.warn(`⚠️ Database provider ${dbProviderId} has no initialize method`);
+      console.warn(`[${instanceId}] ⚠️ Database provider ${dbProviderId} has no initialize method`);
 
       // Try to connect directly if there's a connect method
       if (dbProvider && typeof dbProvider.connect === "function") {
-        console.log(`🔄 Connecting to database using provider: ${dbProviderId}...`);
-        await dbProvider.connect();
-        console.log(`✅ Database connection established using ${dbProviderId}`);
+        console.log(`[${instanceId}] 🔄 Connecting to database using provider: ${dbProviderId}...`);
+        await dbProvider.connect(instanceId);
+        console.log(`[${instanceId}] ✅ Database connection established using ${dbProviderId}`);
       }
     }
-
-    return this;
+    
+    return dbProvider;
+  }
+  
+  /**
+   * Initializes the storage provider
+   *
+   * @async
+   * @param {string} [instanceId="main"] - Instance identifier for logging
+   * @return {Promise<Object>} The initialized storage provider
+   */
+  async initializeStorageProvider(instanceId = "main") {
+    // Get the configured storage provider ID
+    const storageProviderId = (this.config.storage && this.config.storage.provider) || "firebase";
+    const storageProvider = this.getProvider("storage", storageProviderId);
+    
+    // If the provider has an initialize method, call it
+    if (storageProvider && typeof storageProvider.initialize === "function") {
+      console.log(`[${instanceId}] 🔄 Initializing storage provider: ${storageProviderId}...`);
+      await storageProvider.initialize(this.config.storage, instanceId);
+      console.log(`[${instanceId}] ✅ Storage provider ${storageProviderId} initialized successfully`);
+    } else {
+      console.warn(
+        `[${instanceId}] ⚠️ Storage provider ${storageProviderId} has no initialize method`
+      );
+      
+      // Try to connect directly if there's a connect method
+      if (storageProvider && typeof storageProvider.connect === "function") {
+        console.log(`[${instanceId}] 🔄 Connecting to storage using provider: ${storageProviderId}...`);
+        await storageProvider.connect(instanceId);
+        console.log(`[${instanceId}] ✅ Storage connection established using ${storageProviderId}`);
+      }
+    }
+    
+    return storageProvider;
   }
 
   /**
@@ -127,6 +178,18 @@ class ProviderFactory {
     // Use configured provider ID if not specified
     const providerId = id || this.config.database.provider || "mongodb";
     return this.getProvider("database", providerId);
+  }
+  
+  /**
+   * Gets the configured storage provider or a specified alternative
+   *
+   * @param {string} [id=null] - Optional storage provider ID to override config
+   * @return {Object} The storage provider instance
+   */
+  getStorageProvider(id = null) {
+    // Use configured provider ID if not specified
+    const providerId = id || this.config.storage.provider || "firebase";
+    return this.getProvider("storage", providerId);
   }
 
   /**

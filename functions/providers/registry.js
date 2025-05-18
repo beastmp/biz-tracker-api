@@ -22,6 +22,13 @@ const registry = {
 };
 
 /**
+ * Track registrations to prevent duplicate logs for the same provider
+ * @private
+ * @type {Set<string>}
+ */
+const registeredProviders = new Set();
+
+/**
  * Provider Registry singleton that manages the registration and retrieval
  * of provider implementations
  *
@@ -35,10 +42,11 @@ class ProviderRegistry {
    * @param {string} type - Provider category (database, storage, etc.)
    * @param {string} name - Unique identifier for the provider implementation
    * @param {Object} provider - The provider implementation
+   * @param {string} [instanceId="main"] - Instance identifier for logging
    * @throws {Error} If required parameters are missing
    * @return {void}
    */
-  static register(type, name, provider) {
+  static register(type, name, provider, instanceId = "main") {
     if (!type || !name || !provider) {
       throw new Error("Type, name, and provider are required for registration");
     }
@@ -47,8 +55,19 @@ class ProviderRegistry {
       registry[type] = {};
     }
 
+    // Generate a unique key for this provider registration
+    const providerKey = `${type}-${name}`;
+
+    // Store the provider
     registry[type][name] = provider;
-    console.log(`Provider '${name}' registered for type '${type}'`);
+
+    // Only log if we haven't seen this provider before
+    if (!registeredProviders.has(providerKey)) {
+      console.log(
+        `[${instanceId}] 📝 Provider '${name}' registered for type '${type}'`
+      );
+      registeredProviders.add(providerKey);
+    }
   }
 
   /**
@@ -101,14 +120,6 @@ class ProviderRegistry {
     return result;
   }
 
-  /**
-   * Check if a specific provider is registered
-   *
-   * @static
-   * @param {string} type - Provider category to check
-   * @param {string} name - Name of the provider to check for
-   * @return {boolean} True if the provider is registered, false otherwise
-   */
   /**
    * Check if a specific provider is registered
    *
