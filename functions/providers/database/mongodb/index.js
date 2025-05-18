@@ -1,6 +1,8 @@
 /**
  * MongoDB Provider Module
  * Exports MongoDB implementations using composition pattern
+ *
+ * @module mongodb-provider
  */
 
 const MongoDBProvider = require("./provider");
@@ -11,6 +13,8 @@ const MongoDBAssetRepository = require("./assetRepository");
 const MongoDBRelationshipRepository = require("./relationshipRepository");
 const MongoTransactionProvider = require("./transactionProvider");
 const {connectToMongo, checkConnectionHealth} = require("./connection");
+
+// Note: Provider registration is now handled in provider.js
 
 module.exports = {
   // Provider implementation

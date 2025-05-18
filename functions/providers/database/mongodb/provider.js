@@ -10,11 +10,14 @@ const ProviderRegistry = require("../../registry");
 
 /**
  * MongoDB implementation of DatabaseProvider using composition pattern
+ *
+ * @class MongoDBProvider
  */
 class MongoDBProvider {
   /**
    * Creates a new instance of MongoDBProvider
-   * @param {Object} config Configuration object
+   *
+   * @param {Object} config - Configuration object
    */
   constructor(config = {}) {
     this.name = "mongodb";
@@ -37,9 +40,10 @@ class MongoDBProvider {
    * Initialize provider with configuration and establish connection
    *
    * @param {Object} config - Configuration object
+   * @param {string} [instanceId="main"] - Instance identifier for logging
    * @return {Promise<MongoDBProvider>} This provider instance for chaining
    */
-  async initialize(config = {}) {
+  async initialize(config = {}, instanceId = "main") {
     try {
       // Merge config with existing
       if (config) {
@@ -48,45 +52,47 @@ class MongoDBProvider {
 
       // Explicitly establish MongoDB connection
       if (!this.isConnected) {
-        await this.connect();
+        await this.connect(instanceId);
       }
 
       return this;
     } catch (error) {
-      console.error("❌ MongoDB provider initialization failed:", error);
+      console.error(`[${instanceId}] ❌ MongoDB provider initialization failed:`, error);
       throw error;
     }
   }
 
   /**
    * Connect to the MongoDB database
+   * @param {string} [instanceId="main"] - Instance identifier for logging
    * @return {Promise<void>}
    */
-  async connect() {
+  async connect(instanceId = "main") {
     try {
-      await connectToMongo();
+      await connectToMongo(instanceId);
       this.isConnected = true;
-      console.log("✅ MongoDB provider connected successfully");
+      console.log(`[${instanceId}] ✅ MongoDB provider connected successfully`);
     } catch (error) {
       this.isConnected = false;
-      console.error("❌ MongoDB provider connection failed:", error);
+      console.error(`[${instanceId}] ❌ MongoDB provider connection failed:`, error);
       throw error;
     }
   }
 
   /**
    * Disconnect from the MongoDB database
+   * @param {string} [instanceId="main"] - Instance identifier for logging
    * @return {Promise<void>}
    */
-  async disconnect() {
+  async disconnect(instanceId = "main") {
     try {
       if (mongoose.connection.readyState !== 0) {
         await mongoose.connection.close();
         this.isConnected = false;
-        console.log("✅ MongoDB provider disconnected successfully");
+        console.log(`[${instanceId}] ✅ MongoDB provider disconnected successfully`);
       }
     } catch (error) {
-      console.error("❌ MongoDB provider disconnect failed:", error);
+      console.error(`[${instanceId}] ❌ MongoDB provider disconnect failed:`, error);
       throw error;
     }
   }
@@ -122,33 +128,34 @@ class MongoDBProvider {
   }
 
   /**
-   * Create a sales repository
-   * @return {MongoDBSaleRepository} MongoDB sales repository implementation
+   * Create a sale repository
+   *
+   * @return {MongoDBSaleRepository} MongoDB sale repository implementation
    */
-  createSalesRepository() {
-    if (!this.repositories.sales) {
-      this.repositories.sales = new MongoDBSaleRepository(
+  createSaleRepository() {
+    if (!this.repositories.sale) {
+      this.repositories.sale = new MongoDBSaleRepository(
           {db: mongoose.connection},
-          this.config,
+          this.config
       );
 
       // Set item repository dependency if it exists
       if (this.repositories.item) {
-        this.repositories.sales.setItemRepository(this.repositories.item);
+        this.repositories.sale.setItemRepository(this.repositories.item);
       }
 
       // Set relationship repository dependency if it exists
       if (this.repositories.relationship) {
-        this.repositories.sales.setRelationshipRepository(
-            this.repositories.relationship,
+        this.repositories.sale.setRelationshipRepository(
+            this.repositories.relationship
         );
       }
 
       // Set transaction provider
       const transactionProvider = this.createTransactionProvider();
-      this.repositories.sales.setTransactionProvider(transactionProvider);
+      this.repositories.sale.setTransactionProvider(transactionProvider);
     }
-    return this.repositories.sales;
+    return this.repositories.sale;
   }
 
   /**
@@ -229,15 +236,15 @@ class MongoDBProvider {
       const repositories = {
         item: this.createItemRepository(),
         purchase: this.createPurchaseRepository(),
-        sales: this.createSalesRepository(),
+        sale: this.createSaleRepository(),
         asset: this.createAssetRepository(),
       };
 
       this.repositories.relationship.setRepositories(
           repositories.item,
           repositories.purchase,
-          repositories.sales,
-          repositories.asset,
+          repositories.sale,
+          repositories.asset
       );
     }
     return this.repositories.relationship;
@@ -245,14 +252,35 @@ class MongoDBProvider {
 
   /**
    * Get the name of this provider implementation
+   *
    * @return {string} Provider name/identifier
    */
   getProviderName() {
     return "mongodb";
   }
+
+  /**
+   * Static method to register this provider with the registry
+   *
+   * @static
+   * @param {string} [instanceId="main"] - Instance identifier for logging
+   * @return {MongoDBProvider} The registered provider instance
+   */
+  static register(instanceId = "main") {
+    // Create a new instance
+    const provider = new MongoDBProvider();
+
+    // Register with the registry
+    ProviderRegistry.register("database", "mongodb", provider, instanceId);
+
+    return provider;
+  }
 }
 
-// Register the provider with the registry
-ProviderRegistry.register("database", "mongodb", new MongoDBProvider());
+// Self-register the provider with the registry on module load
+// This can be disabled by setting an environment variable if needed for testing
+if (process.env.DISABLE_AUTO_PROVIDER_REGISTRATION !== "true") {
+  MongoDBProvider.register();
+}
 
 module.exports = MongoDBProvider;

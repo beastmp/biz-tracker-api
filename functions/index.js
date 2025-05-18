@@ -10,6 +10,7 @@
 const functions = require("firebase-functions");
 const express = require("express");
 const cors = require("cors");
+const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
 const {initializeProviders} = require("./providers");
@@ -30,12 +31,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// // Mock authentication middleware - replace with actual auth in production
-// app.use((req, res, next) => {
-//   req.user = {businessId: "default"};
-//   next();
-// });
-
 // Default route
 app.get("/", (req, res) => {
   res.send("Biz-Tracker API is running");
@@ -44,27 +39,35 @@ app.get("/", (req, res) => {
 // Flag to track if the app has been initialized
 let isInitialized = false;
 let initializationPromise = null;
+let initializationError = null;
 
 /**
  * Sets up the application by initializing providers and routes
  * Uses a promise caching mechanism to prevent multiple initializations
  * 
+ * @param {string} instanceId - A unique ID for the function instance
  * @returns {Promise<boolean>} A promise that resolves when initialization is complete
  */
-const setupApp = async () => {
+const setupApp = async (instanceId) => {
   // Return existing promise if initialization is in progress
   if (initializationPromise) {
+    console.log(`[${instanceId}] 🔄 Using existing initialization promise...`);
     return initializationPromise;
+  }
+  
+  // If we had a previous initialization error, return it
+  if (initializationError) {
+    return Promise.reject(initializationError);
   }
 
   // Create and cache the initialization promise
   initializationPromise = (async () => {
     try {
-      console.log("Starting application initialization...");
+      console.log(`[${instanceId}] 🚀 Starting application initialization...`);
       
       // Initialize providers first
       await initializeProviders();
-      console.log("✅ All providers initialized successfully");
+      console.log(`[${instanceId}] ✅ All providers initialized successfully`);
 
       // Add request logging middleware
       app.use((req, res, next) => {
@@ -88,15 +91,39 @@ const setupApp = async () => {
       app.use("/relationships", relationshipsRoutes);
       app.use("/health", healthRoutes);
 
+      // Add a diagnostic route to help with debugging
+      app.get("/debug/status", (req, res) => {
+        res.json({
+          status: "operational",
+          initialized: isInitialized,
+          timestamp: new Date().toISOString(),
+          environment: process.env.NODE_ENV || "development"
+        });
+      });
+
       // Error handler
       app.use(errorHandler);
 
       isInitialized = true;
-      console.log("Application setup complete");
+      console.log(`[${instanceId}] 🏁 Application setup complete`);
       
       return true;
     } catch (error) {
-      console.error("Failed to initialize application:", error);
+      console.error(`[${instanceId}] ❌ Failed to initialize application:`, error);
+      
+      // Store the initialization error
+      initializationError = error;
+      
+      // Add a special error route to expose initialization problems
+      app.use("*", (req, res) => {
+        res.status(500).json({
+          error: "Server initialization failed",
+          message: error.message,
+          stack: process.env.NODE_ENV !== "production" ? error.stack : undefined,
+          time: new Date().toISOString()
+        });
+      });
+      
       initializationPromise = null; // Reset so we can try again
       throw error;
     }
@@ -108,12 +135,14 @@ const setupApp = async () => {
 // Start the server if running directly (for local development)
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  setupApp().then(() => {
+  const instanceId = uuidv4().substring(0, 8);
+  
+  setupApp(instanceId).then(() => {
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+      console.log(`[${instanceId}] Server running on port ${PORT}`);
     });
   }).catch(err => {
-    console.error("Failed to start server:", err);
+    console.error(`[${instanceId}] Failed to start server:`, err);
     process.exit(1);
   });
 }
@@ -123,16 +152,28 @@ if (require.main === module) {
  * Uses a cached initialization promise to prevent timeouts
  */
 exports.api = functions.https.onRequest(async (req, res) => {
+  const instanceId = uuidv4().substring(0, 8);
+  
   try {
     // Initialize the app on first request
     if (!isInitialized) {
-      console.log("Initializing app on first request...");
-      await setupApp();
+      console.log(`[${instanceId}] 🔄 Initializing app on first request...`);
+      await setupApp(instanceId);
     }
     // Then handle the request
     return app(req, res);
   } catch (error) {
-    console.error("Error handling request:", error);
-    res.status(500).send("Internal Server Error");
+    console.error(`[${instanceId}] ❌ Error handling request:`, error);
+    
+    // Provide more detailed error information
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: error.message,
+      path: req.path,
+      method: req.method,
+      time: new Date().toISOString(),
+      // Only include stack trace in non-production environments
+      stack: process.env.NODE_ENV !== "production" ? error.stack : undefined,
+    });
   }
 });

@@ -24,17 +24,17 @@ const getProviderFactoryInstance = () => {
 // Export the factory before registering providers
 module.exports = {
   getProviderFactory: getProviderFactoryInstance,
-  initializeProviders: async () => {
+  initializeProviders: async (instanceId = "main") => {
     try {
       // Register all available providers
-      registerAllProviders();
+      registerAllProviders(instanceId);
 
       // Use the singleton instance directly
       providerFactoryInstance = providerFactory;
 
       // Initialize the provider factory
       if (providerFactoryInstance.initializeProviders) {
-        await providerFactoryInstance.initializeProviders();
+        await providerFactoryInstance.initializeProviders(null, instanceId);
       } else {
         // If the method doesn't exist, initialize it
         await providerFactoryInstance.initialize();
@@ -42,7 +42,7 @@ module.exports = {
 
       return providerFactoryInstance;
     } catch (error) {
-      console.error("Failed to initialize providers:", error);
+      console.error(`[${instanceId}] ❌ Failed to initialize providers:`, error);
       throw error;
     }
   },
