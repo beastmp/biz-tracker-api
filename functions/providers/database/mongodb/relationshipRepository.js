@@ -48,7 +48,7 @@ class MongoDBRelationshipRepository extends RelationshipRepository {
    */
   async findAll(filter = {}, options = {}) {
     const {
-      limit = 100,
+      limit,
       skip = 0,
       sort = {createdAt: -1},
     } = options;
@@ -56,12 +56,16 @@ class MongoDBRelationshipRepository extends RelationshipRepository {
     try {
       const query = this._buildQuery(filter);
 
-      const relationships = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const relationships = await queryBuilder.exec();
 
       return relationships.map(documentToObject);
     } catch (error) {

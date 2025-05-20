@@ -48,7 +48,7 @@ class MongoDBSaleRepository extends SaleRepository {
    */
   async findAll(filter = {}, options = {}) {
     const {
-      limit = 100,
+      limit,
       skip = 0,
       sort = {createdAt: -1},
     } = options;
@@ -56,12 +56,16 @@ class MongoDBSaleRepository extends SaleRepository {
     try {
       const query = this._buildQuery(filter);
 
-      const sales = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const sales = await queryBuilder.exec();
 
       return sales.map(documentToObject);
     } catch (error) {
@@ -219,7 +223,7 @@ class MongoDBSaleRepository extends SaleRepository {
    */
   async search(searchText, options = {}) {
     const {
-      limit = 20,
+      limit,
       skip = 0,
       fields = ["customerName", "saleNumber", "notes"],
     } = options;
@@ -228,16 +232,19 @@ class MongoDBSaleRepository extends SaleRepository {
       // If text index exists, use it
       if (searchText && searchText.trim()) {
         try {
-          const sales = await this.model
+          let textSearchQuery = this.model
               .find(
                   {$text: {$search: searchText}},
                   {score: {$meta: "textScore"}},
               )
               .sort({score: {$meta: "textScore"}})
-              .skip(skip)
-              .limit(limit)
-              .exec();
+              .skip(skip);
+              
+          if (limit) {
+            textSearchQuery = textSearchQuery.limit(limit);
+          }
 
+          const sales = await textSearchQuery.exec();
           return sales.map(documentToObject);
         } catch (err) {
           // Fall back to regex search if text search fails
@@ -254,12 +261,15 @@ class MongoDBSaleRepository extends SaleRepository {
         } :
         {};
 
-      const sales = await this.model
+      let regexSearchQuery = this.model
           .find(query)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        regexSearchQuery = regexSearchQuery.limit(limit);
+      }
 
+      const sales = await regexSearchQuery.exec();
       return sales.map(documentToObject);
     } catch (error) {
       console.error(`Error searching sales for "${searchText}":`, error);
@@ -305,7 +315,7 @@ class MongoDBSaleRepository extends SaleRepository {
   async findByCustomer(customerId, options = {}) {
     try {
       const {
-        limit = 100,
+        limit,
         skip = 0,
         sort = {saleDate: -1},
         status = null,
@@ -317,12 +327,16 @@ class MongoDBSaleRepository extends SaleRepository {
         query.status = status;
       }
 
-      const sales = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const sales = await queryBuilder.exec();
 
       return sales.map(documentToObject);
     } catch (error) {

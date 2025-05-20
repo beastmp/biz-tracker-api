@@ -32,19 +32,23 @@ class MongoDBItemRepository extends ItemRepository {
    */
   async findAll(filter = {}, options = {}) {
     const {
-      limit = 100,
+      limit,
       skip = 0,
       sort = {createdAt: -1},
     } = options;
 
     const query = this._buildQuery(filter);
 
-    const items = await this.model
+    let queryBuilder = this.model
         .find(query)
         .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .exec();
+        .skip(skip);
+        
+    if (limit) {
+      queryBuilder = queryBuilder.limit(limit);
+    }
+
+    const items = await queryBuilder.exec();
 
     return items.map(documentToObject);
   }
@@ -94,7 +98,7 @@ class MongoDBItemRepository extends ItemRepository {
    */
   async create(itemData, transaction = null) {
     try {
-      const docData = objectToDocument(itemData);
+      const docData = this._prepareForMongoDB(objectToDocument(itemData));
       // eslint-disable-next-line new-cap
       const item = new this.model(docData);
 
@@ -119,7 +123,7 @@ class MongoDBItemRepository extends ItemRepository {
     if (!id) throw new Error("ID is required for update");
 
     try {
-      const docData = objectToDocument(itemData);
+      const docData = this._prepareForMongoDB(objectToDocument(itemData));
 
       // Remove id from data to prevent _id modification attempt
       if (docData._id) {
@@ -184,7 +188,7 @@ class MongoDBItemRepository extends ItemRepository {
    */
   async search(searchText, options = {}) {
     const {
-      limit = 20,
+      limit,
       skip = 0,
       fields = ["name", "description", "sku"],
     } = options;
@@ -193,16 +197,19 @@ class MongoDBItemRepository extends ItemRepository {
       // If text index exists, use it
       if (searchText && searchText.trim()) {
         try {
-          const items = await this.model
+          let textSearchQuery = this.model
               .find(
                   {$text: {$search: searchText}},
                   {score: {$meta: "textScore"}},
               )
               .sort({score: {$meta: "textScore"}})
-              .skip(skip)
-              .limit(limit)
-              .exec();
+              .skip(skip);
+              
+          if (limit) {
+            textSearchQuery = textSearchQuery.limit(limit);
+          }
 
+          const items = await textSearchQuery.exec();
           return items.map(documentToObject);
         } catch (err) {
           // Fall back to regex search if text search fails
@@ -219,12 +226,15 @@ class MongoDBItemRepository extends ItemRepository {
         } :
         {};
 
-      const items = await this.model
+      let regexSearchQuery = this.model
           .find(query)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        regexSearchQuery = regexSearchQuery.limit(limit);
+      }
 
+      const items = await regexSearchQuery.exec();
       return items.map(documentToObject);
     } catch (error) {
       console.error("Error searching items:", error);
@@ -238,14 +248,14 @@ class MongoDBItemRepository extends ItemRepository {
    * @return {Promise<Array>} - Items with quantities
    */
   async getItemsWithQuantities(options = {}) {
-    const {limit = 100, skip = 0, filter = {}} = options;
+    const {limit, skip = 0, filter = {}} = options;
 
     try {
       // Apply filters if provided
       const matchStage = this._buildQuery(filter);
 
       // Using aggregation to calculate quantities
-      const items = await this.model.aggregate([
+      let pipeline = [
         // Match stage with filters
         {$match: matchStage},
         // Lookup purchases to calculate incoming inventory
@@ -336,9 +346,15 @@ class MongoDBItemRepository extends ItemRepository {
           },
         },
         // Pagination
-        {$skip: skip},
-        {$limit: limit},
-      ]);
+        {$skip: skip}
+      ];
+      
+      // Add limit stage only if limit is provided
+      if (limit) {
+        pipeline.push({$limit: limit});
+      }
+
+      const items = await this.model.aggregate(pipeline);
 
       return items.map(documentToObject);
     } catch (error) {
@@ -431,6 +447,25 @@ class MongoDBItemRepository extends ItemRepository {
     });
 
     return query;
+  }
+
+  /**
+   * Prepare data for MongoDB-specific handling
+   * @param {Object} docData - Document data
+   * @return {Object} - Prepared document data
+   * @private
+   */
+  _prepareForMongoDB(docData) {
+    const preparedData = {...docData};
+
+    // Convert empty arrays to null (or handle as needed)
+    Object.entries(preparedData).forEach(([key, value]) => {
+      if (Array.isArray(value) && value.length === 0) {
+        preparedData[key] = null; // or use delete preparedData[key];
+      }
+    });
+
+    return preparedData;
   }
 }
 

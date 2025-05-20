@@ -30,19 +30,23 @@ class MongoDBAssetRepository extends AssetRepository {
   async findAll(filter = {}, options = {}) {
     try {
       const {
-        limit = 100,
+        limit,
         skip = 0,
         sort = {name: 1},
       } = options;
 
       const query = this._buildQuery(filter);
 
-      const assets = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const assets = await queryBuilder.exec();
 
       return assets;
     } catch (error) {
@@ -196,7 +200,7 @@ class MongoDBAssetRepository extends AssetRepository {
    */
   async search(searchText, options = {}) {
     const {
-      limit = 20,
+      limit,
       skip = 0,
       fields = ["name", "description", "notes", "assetTag", "serialNumber"],
     } = options;
@@ -205,16 +209,19 @@ class MongoDBAssetRepository extends AssetRepository {
       // If text index exists, use it
       if (searchText && searchText.trim()) {
         try {
-          const assets = await this.model
+          let textSearchQuery = this.model
               .find(
                   {$text: {$search: searchText}},
                   {score: {$meta: "textScore"}},
               )
               .sort({score: {$meta: "textScore"}})
-              .skip(skip)
-              .limit(limit)
-              .exec();
+              .skip(skip);
+              
+          if (limit) {
+            textSearchQuery = textSearchQuery.limit(limit);
+          }
 
+          const assets = await textSearchQuery.exec();
           return assets;
         } catch (err) {
           // Fall back to regex search if text search fails
@@ -231,12 +238,15 @@ class MongoDBAssetRepository extends AssetRepository {
         } :
         {};
 
-      const assets = await this.model
+      let regexSearchQuery = this.model
           .find(query)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        regexSearchQuery = regexSearchQuery.limit(limit);
+      }
 
+      const assets = await regexSearchQuery.exec();
       return assets;
     } catch (error) {
       console.error("Error searching assets:", error);

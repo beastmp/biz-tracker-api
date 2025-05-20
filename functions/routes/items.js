@@ -58,8 +58,7 @@ router.patch("/:id/inventory", itemController.updateInventory);
 // Relationship routes for items
 router.get("/:id/relationships", relationshipController.findByPrimaryEntity);
 router.get("/:id/secondary-relationships", relationshipController.findBySecondaryEntity);
-router.post(
-    "/:productId/components/:materialId",
+router.post("/:productId/components/:materialId",
     relationshipController.createProductMaterialRelationship
 );
 

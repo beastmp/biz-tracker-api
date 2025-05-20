@@ -123,7 +123,7 @@ const itemModel = defineModel("Item", {
     {fields: {category: 1}},
     {fields: {tags: 1}},
     {fields: {name: "text", description: "text", sku: "text", tags: "text"}},
-  ],
+  ]
 });
 
 /**
@@ -213,7 +213,7 @@ class Item extends BaseModel {
    * @return {Object} Plain object representation
    */
   toObject() {
-    return {
+    const obj = {
       ...super.toObject(),
       name: this.name,
       sku: this.sku,
@@ -238,6 +238,8 @@ class Item extends BaseModel {
       imageUrl: this.imageUrl,
       tags: this.tags,
     };
+    
+    return obj;
   }
 
   /**
@@ -288,7 +290,6 @@ module.exports = {
   virtuals: itemModel.virtuals,
   methods: itemModel.methods,
   statics: itemModel.statics,
-  // Also export the model and class for other uses
   itemModel,
   Item,
 };

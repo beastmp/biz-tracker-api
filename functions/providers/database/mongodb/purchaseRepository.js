@@ -48,7 +48,7 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
    */
   async findAll(filter = {}, options = {}) {
     const {
-      limit = 100,
+      limit,
       skip = 0,
       sort = {purchaseDate: -1},
       populate = false,
@@ -60,8 +60,11 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
       let purchaseQuery = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit);
+          .skip(skip);
+          
+      if (limit) {
+        purchaseQuery = purchaseQuery.limit(limit);
+      }
 
       // Optionally populate item information
       if (populate && populate.includes("items")) {
@@ -252,7 +255,7 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
    */
   async search(searchText, options = {}) {
     const {
-      limit = 20,
+      limit,
       skip = 0,
       fields = ["purchaseNumber", "supplier", "notes"],
     } = options;
@@ -261,16 +264,19 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
       // If text index exists, use it
       if (searchText && searchText.trim()) {
         try {
-          const purchases = await this.model
+          let textSearchQuery = this.model
               .find(
                   {$text: {$search: searchText}},
                   {score: {$meta: "textScore"}},
               )
               .sort({score: {$meta: "textScore"}})
-              .skip(skip)
-              .limit(limit)
-              .exec();
+              .skip(skip);
+              
+          if (limit) {
+            textSearchQuery = textSearchQuery.limit(limit);
+          }
 
+          const purchases = await textSearchQuery.exec();
           return purchases.map(documentToObject);
         } catch (err) {
           // Fall back to regex search if text search fails
@@ -287,13 +293,16 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
         } :
         {};
 
-      const purchases = await this.model
+      let regexSearchQuery = this.model
           .find(query)
           .sort({purchaseDate: -1})
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        regexSearchQuery = regexSearchQuery.limit(limit);
+      }
 
+      const purchases = await regexSearchQuery.exec();
       return purchases.map(documentToObject);
     } catch (error) {
       console.error(`Error searching purchases for "${searchText}":`, error);
@@ -319,17 +328,21 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
       }
 
       const {
-        limit = 100,
+        limit,
         skip = 0,
         sort = {purchaseDate: -1},
       } = options;
 
-      const purchases = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const purchases = await queryBuilder.exec();
 
       return purchases.map(documentToObject);
     } catch (error) {
@@ -354,7 +367,7 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
       if (!itemId) return [];
 
       const {
-        limit = 100,
+        limit,
         skip = 0,
         sort = {purchaseDate: -1},
       } = options;
@@ -362,12 +375,16 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
       // MongoDB specific query to find purchases containing the item
       const query = {"items.itemId": itemId};
 
-      const purchases = await this.model
+      let queryBuilder = this.model
           .find(query)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const purchases = await queryBuilder.exec();
 
       return purchases.map(documentToObject);
     } catch (error) {
@@ -387,19 +404,23 @@ class MongoDBPurchaseRepository extends PurchaseRepository {
   async findByQuery(query = {}, options = {}) {
     try {
       const {
-        limit = 100,
+        limit,
         skip = 0,
         sort = {purchaseDate: -1},
       } = options;
 
       const mongoQuery = this._buildQuery(query);
 
-      const purchases = await this.model
+      let queryBuilder = this.model
           .find(mongoQuery)
           .sort(sort)
-          .skip(skip)
-          .limit(limit)
-          .exec();
+          .skip(skip);
+          
+      if (limit) {
+        queryBuilder = queryBuilder.limit(limit);
+      }
+
+      const purchases = await queryBuilder.exec();
 
       return purchases.map(documentToObject);
     } catch (error) {
