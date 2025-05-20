@@ -279,6 +279,55 @@ const itemController = {
       status: "success",
       data: normalizeData(inventoryByCategory)
     });
+  },
+
+  /**
+   * Get next available SKU
+   * The SKU follows a pattern of 10 digits (e.g., 0000000001, 0000000002, etc.)
+   * 
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async getNextSku(req, res) {
+    const nextSku = await itemService.getNextSku();
+    
+    res.status(200).json({
+      status: "success",
+      nextSku
+    });
+  },
+  
+  /**
+   * Get all unique categories used by items
+   * 
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async getCategories(req, res) {
+    const categories = await itemService.getCategories();
+    
+    res.status(200).json({
+      status: "success",
+      data: categories
+    });
+  },
+  
+  /**
+   * Get all unique tags used by items
+   * 
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async getTags(req, res) {
+    const tags = await itemService.getTags();
+    
+    res.status(200).json({
+      status: "success",
+      data: tags
+    });
   }
 };
 

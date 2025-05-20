@@ -188,6 +188,80 @@ class ItemService {
       return result;
     }, {});
   }
+
+  /**
+   * Get the next available SKU number
+   * Follows a 10-digit format (e.g., 0000000001, 0000000002, etc.)
+   * 
+   * @returns {Promise<string>} Next available SKU
+   */
+  async getNextSku() {
+    // Get all items and extract SKUs matching our pattern
+    const items = await this.itemRepository.findAll();
+    
+    // Filter for items with a valid numeric SKU matching our pattern
+    const numericSkus = items
+      .map(item => item.sku)
+      .filter(sku => /^\d{10}$/.test(sku))
+      .map(sku => parseInt(sku, 10))
+      .filter(num => !isNaN(num));
+    
+    // Default to first SKU if none exist matching our pattern
+    if (numericSkus.length === 0) {
+      return "0000000001";
+    }
+    
+    // Find the highest existing SKU and increment by 1
+    const highestSku = Math.max(...numericSkus);
+    const nextSkuNumber = highestSku + 1;
+    
+    // Pad to 10 digits
+    return nextSkuNumber.toString().padStart(10, "0");
+  }
+  
+  /**
+   * Get all unique categories from items
+   * 
+   * @returns {Promise<string[]>} Array of unique categories
+   */
+  async getCategories() {
+    const items = await this.itemRepository.findAll();
+    
+    // Extract and deduplicate categories
+    const categories = new Set();
+    
+    items.forEach(item => {
+      if (item.category && typeof item.category === "string" && item.category.trim() !== "") {
+        categories.add(item.category.trim());
+      }
+    });
+    
+    return Array.from(categories).sort();
+  }
+  
+  /**
+   * Get all unique tags from items
+   * 
+   * @returns {Promise<string[]>} Array of unique tags
+   */
+  async getTags() {
+    const items = await this.itemRepository.findAll();
+    
+    // Extract and flatten all tags
+    const tags = new Set();
+    
+    items.forEach(item => {
+      if (Array.isArray(item.tags)) {
+        item.tags.forEach(tag => {
+          if (typeof tag === "string" && tag.trim() !== "") {
+            tags.add(tag.trim());
+          }
+        });
+      }
+    });
+    
+    return Array.from(tags).sort();
+  }
 }
 
 module.exports = new ItemService();

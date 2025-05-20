@@ -31,6 +31,13 @@ router.get("/inventory/by-category", itemController.getInventoryByCategory);
 // SKU lookup needs to come before general ID lookup
 router.get("/sku/:sku", itemController.getItemBySku);
 
+/**
+ * Routes for getting the next available SKU, all categories, and all tags
+ */
+router.get("/nextsku", itemController.getNextSku);
+router.get("/categories", itemController.getCategories);
+router.get("/tags", itemController.getTags);
+
 // Basic CRUD routes
 router.get("/", itemController.getAllItems);
 router.post(
