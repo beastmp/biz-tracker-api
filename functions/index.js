@@ -7,14 +7,14 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-const functions = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const express = require("express");
 const cors = require("cors");
 const { v4: uuidv4 } = require("uuid");
 require("dotenv").config();
 
-const {initializeProviders} = require("./providers");
-const {errorHandler} = require("./validation");
+const { initializeProviders } = require("./providers");
+const { errorHandler } = require("./validation");
 
 // Create the Express app
 const app = express();
@@ -76,20 +76,22 @@ const setupApp = async (instanceId) => {
       });
 
       // Import routes after provider initialization
-      const assetsRoutes = require("./routes/assets");
-      const itemsRoutes = require("./routes/items");
-      const purchasesRoutes = require("./routes/purchases");
-      const salesRoutes = require("./routes/sales");
-      const relationshipsRoutes = require("./routes/relationships");
       const healthRoutes = require("./routes/health");
+      const itemRoutes = require("./routes/items");
+      const assetRoutes = require("./routes/assets");
+      const purchaseRoutes = require("./routes/purchases");
+      const saleRoutes = require("./routes/sales");
+      const relationshipRoutes = require("./routes/relationships");
+      const migrationRoutes = require("./routes/migrations"); // Add migration routes
 
       // Routes - we're using consistent path patterns (no /api prefix)
-      app.use("/assets", assetsRoutes);
-      app.use("/items", itemsRoutes);
-      app.use("/purchases", purchasesRoutes);
-      app.use("/sales", salesRoutes);
-      app.use("/relationships", relationshipsRoutes);
       app.use("/health", healthRoutes);
+      app.use("/items", itemRoutes);
+      app.use("/assets", assetRoutes);
+      app.use("/purchases", purchaseRoutes);
+      app.use("/sales", saleRoutes);
+      app.use("/relationships", relationshipRoutes);
+      app.use("/migrations", migrationRoutes); // Register migration routes
 
       // Add a diagnostic route to help with debugging
       app.get("/debug/status", (req, res) => {
@@ -150,16 +152,32 @@ if (require.main === module) {
 /**
  * Firebase Cloud Function entry point with lazy initialization
  * Uses a cached initialization promise to prevent timeouts
+ * Implements v2 Firebase Functions with increased memory and timeout for migration operations
+ * 
+ * @type {import("firebase-functions/v2/https").HttpsFunction}
  */
-exports.api = functions.https.onRequest(async (req, res) => {
+exports.api = onRequest({
+  timeoutSeconds: 540, // 9 minutes for long-running migration operations
+  memory: "1GiB",     // Increased memory for large data processing
+  region: "us-central1",
+  minInstances: 0,
+  maxInstances: 10,
+}, async (req, res) => {
   const instanceId = uuidv4().substring(0, 8);
   
   try {
+    // Log extra information for migration-related requests
+    const isMigrationRequest = req.path.startsWith("/migrations");
+    if (isMigrationRequest) {
+      console.log(`[${instanceId}] 🔄 Handling migration request: ${req.method} ${req.path}`);
+    }
+    
     // Initialize the app on first request
     if (!isInitialized) {
       console.log(`[${instanceId}] 🔄 Initializing app on first request...`);
       await setupApp(instanceId);
     }
+    
     // Then handle the request
     return app(req, res);
   } catch (error) {
