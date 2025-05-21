@@ -147,6 +147,54 @@ const itemController = {
       data: normalizeData(item)
     });
   },
+
+  /**
+   * Create a new material item
+   * 
+   * @param {Object} req - Express request object 
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async createMaterialItem(req, res) {
+    const item = await itemService.createMaterialItem(req.body);
+    
+    res.status(201).json({
+      status: "success",
+      data: normalizeData(item)
+    });
+  },
+
+  /**
+   * Create a new product item
+   * 
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async createProductItem(req, res) {
+    const item = await itemService.createProductItem(req.body);
+    
+    res.status(201).json({
+      status: "success",
+      data: normalizeData(item)
+    });
+  },
+
+  /**
+   * Create a new dual-purpose item (both product and material)
+   * 
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @returns {Promise<void>}
+   */
+  async createDualPurposeItem(req, res) {
+    const item = await itemService.createDualPurposeItem(req.body);
+    
+    res.status(201).json({
+      status: "success",
+      data: normalizeData(item)
+    });
+  },
   
   /**
    * Update an item

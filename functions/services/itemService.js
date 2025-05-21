@@ -19,6 +19,80 @@ class ItemService {
   }
 
   /**
+   * Create a new material item with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Promise<Object>} New material item instance
+   */
+  async createMaterialItem(data = {}) {
+    const materialData = {
+      ...data,
+      itemType: "material",
+      // Materials typically tracked by weight, but respect provided config
+      tracking: data.tracking || {
+        measurement: "weight",
+        amount: 0
+      }
+    };
+    
+    const item = new Item(materialData);
+    item.validate();
+    
+    return this.itemRepository.create(item.toObject());
+  }
+
+  /**
+   * Create a new product item with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Promise<Object>} New product item instance
+   */
+  async createProductItem(data = {}) {
+    // Products may need SKU generation if not provided
+    if (!data.sku) {
+      data.sku = await this.getNextSku();
+    }
+    
+    const productData = {
+      ...data,
+      itemType: "product",
+      // Products typically tracked by quantity, but respect provided config
+      tracking: data.tracking || {
+        measurement: "quantity", 
+        amount: 0
+      }
+    };
+    
+    const item = new Item(productData);
+    item.validate();
+    
+    return this.itemRepository.create(item.toObject());
+  }
+
+  /**
+   * Create a new dual-purpose item (both material and product) with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Promise<Object>} New dual-purpose item instance
+   */
+  async createDualPurposeItem(data = {}) {
+    // Generate SKU if not provided
+    if (!data.sku) {
+      data.sku = await this.getNextSku();
+    }
+    
+    const dualPurposeData = {
+      ...data,
+      itemType: "both"
+    };
+    
+    const item = new Item(dualPurposeData);
+    item.validate();
+    
+    return this.itemRepository.create(item.toObject());
+  }
+
+  /**
    * Get all inventory items
    * 
    * @param {Object} query - Query parameters for filtering items
@@ -48,19 +122,6 @@ class ItemService {
   async getItemBySku(sku) {
     const items = await this.itemRepository.findAll({ sku }, { limit: 1 });
     return items[0] || null;
-  }
-
-  /**
-   * Create a new inventory item
-   * 
-   * @param {Object} itemData - Item data
-   * @returns {Promise<Object>} Created item
-   */
-  async createItem(itemData) {
-    const item = new Item(itemData);
-    item.validate();
-    
-    return this.itemRepository.create(item.toObject());
   }
 
   /**

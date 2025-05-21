@@ -3,6 +3,75 @@
  * Defines the domain model for inventory items
  */
 const {FieldTypes, defineModel, BaseModel} = require("./baseModel");
+
+/**
+ * Measurement type enum values
+ * @type {string[]}
+ */
+const MEASUREMENT_TYPES = ["quantity", "weight", "length", "area", "volume"];
+
+/**
+ * Units for each measurement type
+ * @type {Object.<string, string[]>}
+ */
+const MEASUREMENT_UNITS = {
+  "quantity": ["ea", "dozen", "case", "pallet", "box"],
+  "weight": ["mg", "g", "kg", "oz", "lb", "ton"],
+  "length": ["mm", "cm", "m", "in", "ft", "yd"],
+  "area": ["sq.mm", "sq.cm", "sq.m", "sq.in", "sq.ft", "acre", "hectare"],
+  "volume": ["ml", "l", "gal", "fl.oz", "cu.in", "cu.ft", "cu.m"]
+};
+
+/**
+ * Item types enum values
+ * @type {string[]}
+ */
+const ITEM_TYPES = ["material", "product", "both"];
+
+/**
+ * Creates a measurement configuration object
+ * @typedef {Object} MeasurementConfig
+ * @property {string} measurement - Type of measurement (from MEASUREMENT_TYPES)
+ * @property {number} amount - Quantity amount
+ * @property {string} unit - Unit of measurement
+ *
+ * @param {Object} data - Source measurement data
+ * @param {string} [defaultMeasurement="quantity"] - Default measurement type if not specified
+ * @return {MeasurementConfig} Configured measurement object
+ */
+const createMeasurementConfig = (data = {}, defaultMeasurement = "quantity") => ({
+  measurement: data?.measurement || defaultMeasurement,
+  amount: data?.amount || 0,
+  unit: data?.unit || ""
+});
+
+/**
+ * Validates if a unit is appropriate for a measurement type
+ * 
+ * @param {string} unit - Unit to validate
+ * @param {string} measurementType - Type of measurement
+ * @return {boolean} True if valid
+ * @throws {Error} If validation fails
+ */
+const validateMeasurementUnit = (unit, measurementType) => {
+  if (!unit) {
+    return true;
+  }
+  
+  if (!MEASUREMENT_TYPES.includes(measurementType)) {
+    throw new Error(`Invalid measurement type: ${measurementType}`);
+  }
+  
+  if (MEASUREMENT_UNITS[measurementType] && 
+      !MEASUREMENT_UNITS[measurementType].includes(unit)) {
+    throw new Error(
+      `Invalid unit "${unit}" for measurement type "${measurementType}"`
+    );
+  }
+  
+  return true;
+};
+
 /**
  * Create the item model definition
  */
@@ -17,6 +86,10 @@ const itemModel = defineModel("Item", {
     required: true,
     unique: true,
   },
+  sellerSKU: {
+    type: FieldTypes.STRING,
+    required: false,
+  },
   category: {
     type: FieldTypes.STRING,
     required: true,
@@ -25,84 +98,79 @@ const itemModel = defineModel("Item", {
     type: FieldTypes.STRING,
     required: false,
   },
-  trackingType: {
-    type: FieldTypes.ENUM,
-    values: ["quantity", "weight", "length", "area", "volume"],
-    default: "quantity",
-  },
   itemType: {
     type: FieldTypes.ENUM,
-    values: ["material", "product", "both"],
+    values: ITEM_TYPES,
     default: "material",
   },
-  // Quantity tracking
-  quantity: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  // Weight tracking
-  weight: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  weightUnit: {
-    type: FieldTypes.ENUM,
-    values: ["oz", "lb", "g", "kg"],
-    default: "kg",
-  },
-  // Length tracking
-  length: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  lengthUnit: {
-    type: FieldTypes.ENUM,
-    values: ["mm", "cm", "m", "in", "ft", "yd"],
-    default: "m",
-  },
-  // Area tracking
-  area: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  areaUnit: {
-    type: FieldTypes.ENUM,
-    values: ["sqft", "sqm", "sqyd", "acre", "ha"],
-    default: "sqm",
-  },
-  // Volume tracking
-  volume: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  volumeUnit: {
-    type: FieldTypes.ENUM,
-    values: ["ml", "l", "gal", "floz", "cu_ft", "cu_m"],
-    default: "l",
-  },
-  // Pricing
-  price: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  priceType: {
-    type: FieldTypes.ENUM,
-    values: ["each", "per_weight_unit", "per_length_unit", "per_area_unit", "per_volume_unit"],
-    default: "each",
-  },
-  sellByMeasurement: {
-    type: FieldTypes.ENUM,
-    values: ["quantity", "weight", "length", "area", "volume"],
-    default: "quantity",
-  },
-  cost: {
-    type: FieldTypes.NUMBER,
-    default: 0,
-  },
-  // Package information
-  packageSize: {
+  // Inventory tracking configuration
+  tracking: {
     type: FieldTypes.OBJECT,
-    default: null,
+    properties: {
+      measurement: {
+        type: FieldTypes.ENUM,
+        values: MEASUREMENT_TYPES,
+        default: "quantity",
+      },
+      amount: {
+        type: FieldTypes.NUMBER,
+        default: 0,
+      },
+      unit: {
+        type: FieldTypes.STRING,
+        default: "",
+        validation: (value, obj) => {
+          if (!value) return true;
+          return MEASUREMENT_UNITS[obj.measurement]?.includes(value);
+        },
+      },
+    },
+  },
+  // Price configuration
+  price: {
+    type: FieldTypes.OBJECT,
+    properties: {
+      measurement: {
+        type: FieldTypes.ENUM,
+        values: MEASUREMENT_TYPES,
+        default: "quantity",
+      },
+      amount: {
+        type: FieldTypes.NUMBER,
+        default: 0,
+      },
+      unit: {
+        type: FieldTypes.STRING,
+        default: "",
+        validation: (value, obj) => {
+          if (!value) return true;
+          return MEASUREMENT_UNITS[obj.measurement]?.includes(value);
+        },
+      },
+    },
+  },
+  // Cost configuration
+  cost: {
+    type: FieldTypes.OBJECT,
+    properties: {
+      measurement: {
+        type: FieldTypes.ENUM,
+        values: MEASUREMENT_TYPES,
+        default: "quantity",
+      },
+      amount: {
+        type: FieldTypes.NUMBER,
+        default: 0,
+      },
+      unit: {
+        type: FieldTypes.STRING,
+        default: "",
+        validation: (value, obj) => {
+          if (!value) return true;
+          return MEASUREMENT_UNITS[obj.measurement]?.includes(value);
+        },
+      },
+    },
   },
   // Image
   imageUrl: {
@@ -138,34 +206,18 @@ class Item extends BaseModel {
     super(data);
 
     // Required fields
-    this.name = data.name || "";
     this.sku = data.sku || "";
     this.category = data.category || "";
-    this.description = data.description || "";
-
-    // Type fields
-    this.trackingType = data.trackingType || "quantity";
     this.itemType = data.itemType || "material";
 
-    // Inventory tracking fields
-    this.quantity = data.quantity || 0;
-    this.weight = data.weight || 0;
-    this.weightUnit = data.weightUnit || "kg";
-    this.length = data.length || 0;
-    this.lengthUnit = data.lengthUnit || "m";
-    this.area = data.area || 0;
-    this.areaUnit = data.areaUnit || "sqm";
-    this.volume = data.volume || 0;
-    this.volumeUnit = data.volumeUnit || "l";
+    // Optional fields
+    this.description = data.description || "";
+    this.sellerSKU = data.sellerSKU || "";
 
-    // Pricing fields
-    this.price = data.price || 0;
-    this.priceType = data.priceType || "each";
-    this.sellByMeasurement = data.sellByMeasurement || this.trackingType;
-    this.cost = data.cost || 0;
-
-    // Package information
-    this.packageSize = data.packageSize || null;
+    // Initialize nested objects using the shared function
+    this.tracking = createMeasurementConfig(data.tracking, "quantity");
+    this.price = createMeasurementConfig(data.price, this.tracking.measurement);
+    this.cost = createMeasurementConfig(data.cost, this.price.measurement);
 
     // Image
     this.imageUrl = data.imageUrl || null;
@@ -193,15 +245,13 @@ class Item extends BaseModel {
       throw new Error("Category is required");
     }
 
-    // Validate tracking type
-    const validTrackingTypes = ["quantity", "weight", "length", "area", "volume"];
-    if (!validTrackingTypes.includes(this.trackingType)) {
-      throw new Error(`Invalid tracking type: ${this.trackingType}`);
-    }
+    // Validate measurement configurations using the shared function
+    validateMeasurementUnit(this.tracking.unit, this.tracking.measurement);
+    validateMeasurementUnit(this.price.unit, this.price.measurement);
+    validateMeasurementUnit(this.cost.unit, this.cost.measurement);
 
     // Validate item type
-    const validItemTypes = ["material", "product", "both"];
-    if (!validItemTypes.includes(this.itemType)) {
+    if (!ITEM_TYPES.includes(this.itemType)) {
       throw new Error(`Invalid item type: ${this.itemType}`);
     }
 
@@ -217,24 +267,25 @@ class Item extends BaseModel {
       ...super.toObject(),
       name: this.name,
       sku: this.sku,
+      sellerSKU: this.sellerSKU,
       category: this.category,
       description: this.description,
-      trackingType: this.trackingType,
       itemType: this.itemType,
-      quantity: this.quantity,
-      weight: this.weight,
-      weightUnit: this.weightUnit,
-      length: this.length,
-      lengthUnit: this.lengthUnit,
-      area: this.area,
-      areaUnit: this.areaUnit,
-      volume: this.volume,
-      volumeUnit: this.volumeUnit,
-      price: this.price,
-      priceType: this.priceType,
-      sellByMeasurement: this.sellByMeasurement,
-      cost: this.cost,
-      packageSize: this.packageSize,
+      tracking: {
+        measurement: this.tracking.measurement,
+        amount: this.tracking.amount,
+        unit: this.tracking.unit
+      },
+      price: {
+        measurement: this.price.measurement,
+        amount: this.price.amount,
+        unit: this.price.unit
+      },
+      cost: {
+        measurement: this.cost.measurement,
+        amount: this.cost.amount,
+        unit: this.cost.unit
+      },
       imageUrl: this.imageUrl,
       tags: this.tags,
     };
@@ -243,24 +294,14 @@ class Item extends BaseModel {
   }
 
   /**
-   * Get the current inventory value based on tracking type
+   * Get the current inventory value based on tracking measurement
    * @return {Object} Inventory value with unit
    */
   getInventoryValue() {
-    switch (this.trackingType) {
-      case "quantity":
-        return {value: this.quantity, unit: null};
-      case "weight":
-        return {value: this.weight, unit: this.weightUnit};
-      case "length":
-        return {value: this.length, unit: this.lengthUnit};
-      case "area":
-        return {value: this.area, unit: this.areaUnit};
-      case "volume":
-        return {value: this.volume, unit: this.volumeUnit};
-      default:
-        return {value: this.quantity, unit: null};
-    }
+    return {
+      value: this.tracking.amount, 
+      unit: this.tracking.measurement === "quantity" ? null : this.tracking.unit
+    };
   }
 
   /**
@@ -268,8 +309,56 @@ class Item extends BaseModel {
    * @return {number} Total cost of inventory
    */
   getInventoryValueCost() {
-    const inventoryValue = this.getInventoryValue();
-    return inventoryValue.value * this.cost;
+    return this.tracking.amount * this.cost.amount;
+  }
+
+  /**
+   * Create a new material item with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Item} New material item instance
+   */
+  static createMaterial(data = {}) {
+    return new Item({
+      ...data,
+      itemType: "material",
+      // Materials typically tracked by weight, but respect provided config
+      tracking: createMeasurementConfig(
+        data.tracking,
+        data.tracking?.measurement || "weight"
+      )
+    });
+  }
+
+  /**
+   * Create a new product item with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Item} New product item instance
+   */
+  static createProduct(data = {}) {
+    return new Item({
+      ...data,
+      itemType: "product",
+      // Products typically tracked by quantity, but respect provided config
+      tracking: createMeasurementConfig(
+        data.tracking,
+        data.tracking?.measurement || "quantity"
+      )
+    });
+  }
+
+  /**
+   * Create a new dual-purpose item (both material and product) with appropriate defaults
+   * 
+   * @param {Object} data - Item data
+   * @return {Item} New dual-purpose item instance
+   */
+  static createDualPurposeItem(data = {}) {
+    return new Item({
+      ...data,
+      itemType: "both"
+    });
   }
 
   /**

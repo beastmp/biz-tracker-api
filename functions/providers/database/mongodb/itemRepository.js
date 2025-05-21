@@ -22,6 +22,11 @@ class MongoDBItemRepository extends ItemRepository {
     super(config);
     this.collectionPrefix = config.collectionPrefix || "";
     this.model = createModel("Item", this.collectionPrefix);
+    
+    // Store reference to the MongoDB provider
+    if (config.provider) {
+      this.provider = config.provider;
+    }
   }
 
   /**

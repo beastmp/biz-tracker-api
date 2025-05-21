@@ -386,6 +386,62 @@ class ItemRepository extends ItemInterface {
       throw error;
     }
   }
+
+  /**
+   * Update an item with raw MongoDB operators
+   * 
+   * @param {string} id - ID of the item to update
+   * @param {Object} updateData - Update data with MongoDB operators like $set, $unset, etc.
+   * @param {Object} [transaction] - Optional transaction
+   * @return {Promise<Object|null>} Updated item or null if not found
+   */
+  async updateRaw(id, updateData, transaction = null) {
+    try {
+      // Get the database provider implementation
+      const provider = this.getProvider();
+      
+      // Call the provider's raw update method if available
+      if (provider.updateRaw) {
+        return await provider.updateRaw("items", id, updateData, transaction);
+      }
+      
+      // Fallback to regular update if raw update not supported by provider
+      console.warn("Provider does not support raw updates, falling back to regular update");
+      
+      // Remove MongoDB operators from the update
+      const cleanData = {};
+      if (updateData.$set) {
+        Object.assign(cleanData, updateData.$set);
+      }
+      
+      // Attempt standard update as fallback
+      return await this.update(id, cleanData, transaction);
+    } catch (error) {
+      console.error(`Error in raw update for item ${id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the database provider instance
+   * 
+   * @return {Object} Provider instance
+   */
+  getProvider() {
+    // If this is a MongoDB repository, it will have a direct provider reference
+    if (this.provider) {
+      return this.provider;
+    }
+    
+    // Otherwise try to get it from the provider factory
+    try {
+      const providerFactory = require("../providerFactory");
+      return providerFactory.getDatabaseProvider();
+    } catch (error) {
+      console.error("Failed to get database provider:", error);
+      throw new Error("Database provider not available");
+    }
+  }
 }
 
 module.exports = ItemRepository;

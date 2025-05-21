@@ -49,6 +49,13 @@ router.post(
     itemController.createItem
 );
 
+/**
+ * Type-specific item creation endpoints
+ */
+router.post("/materials", itemController.createMaterialItem);
+router.post("/products", itemController.createProductItem);
+router.post("/dual-purpose", itemController.createDualPurposeItem);
+
 // Parameter-based routes
 router.get("/:id", itemController.getItemById);
 router.patch(
