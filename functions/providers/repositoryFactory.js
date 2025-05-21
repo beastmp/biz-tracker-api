@@ -26,31 +26,38 @@ const {
 const repositoryCache = new Map();
 
 /**
- * List of methods that should use transactions for each repository type
- * @type {Object.<string, string[]>}
+ * Common repository methods that should use transactions when available
+ * This serves as a default list of method names to check for in repositories
+ * @type {string[]}
  * @private
  */
-const transactionalMethods = {
-  purchase: [
-    "create", "update", "delete", "batchUpdate", "addItems", "removeItems",
-    "linkAssets", "unlinkAssets", "processReceive", "updatePaymentStatus",
-  ],
-  item: [
-    "create", "update", "delete", "batchUpdate", "updateInventory",
-    "createDerivedItems",
-  ],
-  sale: [
-    "create", "update", "delete", "batchUpdate", "addItems", "removeItems",
-    "processShipment", "updatePaymentStatus",
-  ],
-  asset: [
-    "create", "update", "delete", "batchUpdate", "depreciate",
-  ],
-  relationship: [
-    "create", "update", "delete", "createRelationship", "updateRelationship",
-    "deleteRelationship", "batchCreateRelationships", "batchUpdateRelationships",
-    "batchDeleteRelationships",
-  ],
+const commonTransactionalMethodNames = [
+  "create", "update", "delete", "batchUpdate", "addItems", "removeItems", 
+  "updateInventory", "createDerivedItems", "processShipment", "updatePaymentStatus",
+  "linkAssets", "unlinkAssets", "processReceive", "depreciate"
+];
+
+/**
+ * Determines which methods in a repository should use transactions
+ * 
+ * @param {Object} repository - The repository instance to analyze
+ * @param {string} repoType - The type of repository (e.g., "item", "purchase")
+ * @returns {string[]} - Array of method names that should be transactional
+ * @private
+ */
+const determineTransactionalMethods = (repository, repoType) => {
+  // Start with common methods that modify data
+  const methodsToCheck = [...commonTransactionalMethodNames];
+  
+  // Add repository-specific methods that might exist
+  if (repoType === "relationship") {
+    methodsToCheck.push("createRelationship", "updateRelationship", "deleteRelationship");
+  }
+  
+  // Filter the list to only include methods that actually exist on the repository
+  return methodsToCheck.filter(methodName => 
+    typeof repository[methodName] === "function"
+  );
 };
 
 /**
@@ -93,29 +100,30 @@ const getRepository = (type, options = {}, useCache = true) => {
 
   switch (repoType) {
     case "purchase":
-      repository = providerFactory.getRepository("purchase", null, options);
+      repository = providerFactory.createPurchaseRepository(null, options);
       break;
     case "item":
-      repository = providerFactory.getRepository("item", null, options);
+      repository = providerFactory.createItemRepository(null, options);
       break;
     case "sale":
-      repository = providerFactory.getRepository("sale", null, options);
+      repository = providerFactory.createSaleRepository(null, options);
       break;
     case "asset":
-      repository = providerFactory.getRepository("asset", null, options);
+      repository = providerFactory.createAssetRepository(null, options);
       break;
     case "relationship":
-      repository = providerFactory.getRepository("relationship", null, options);
+      repository = providerFactory.createRelationshipRepository(null, options);
       break;
     default:
       throw new Error(`Unknown repository type: ${type}`);
   }
 
   // Enhance repository with error handling and transactions if methods defined
-  if (transactionalMethods[repoType]) {
+  const transactionalMethods = determineTransactionalMethods(repository, repoType);
+  if (transactionalMethods.length > 0) {
     repository = enhanceRepository(
         repository,
-        transactionalMethods[repoType],
+        transactionalMethods,
         type,
     );
   }
@@ -242,23 +250,40 @@ const getAssetRepository = (options = {}) => {
 
 /**
  * Get a relationship repository with dependencies injected
+ * 
  * @param {Object} options - Additional options
  * @return {Object} Relationship repository
  */
 const getRelationshipRepository = (options = {}) => {
   const repository = getRepository("relationship", options);
 
-  // Register entity repositories that relationship repository needs to validate
-  repository.registerEntityRepository("Purchase", getPurchaseRepository(options));
-  repository.registerEntityRepository("Item", getItemRepository(options));
-  repository.registerEntityRepository("Asset", getAssetRepository(options));
-  repository.registerEntityRepository("Sale", getSaleRepository(options));
+  try {
+    // Register entity repositories that relationship repository needs to validate
+    repository.registerEntityRepository("Purchase", getPurchaseRepository(options));
+    repository.registerEntityRepository("Item", getItemRepository(options));
+    repository.registerEntityRepository("Asset", getAssetRepository(options));
+    repository.registerEntityRepository("Sale", getSaleRepository(options));
 
-  // Inject transaction provider
-  if (!repository.transactionProvider) {
-    const providerFactory = getProviderFactory();
-    const transactionProvider = providerFactory.getTransactionProvider();
-    repository.setTransactionProvider(transactionProvider);
+    // Inject transaction provider safely
+    if (!repository.transactionProvider) {
+      // Get the transaction provider directly from ProviderFactory
+      // This avoids dependency cycles in our factory methods
+      if (ProviderFactory && typeof ProviderFactory.getTransactionProvider === "function") {
+        const transactionProvider = ProviderFactory.getTransactionProvider();
+        repository.setTransactionProvider(transactionProvider);
+      } else {
+        // Create a no-op transaction provider as fallback
+        repository.setTransactionProvider({
+          beginTransaction: async () => null,
+          commitTransaction: async () => true,
+          rollbackTransaction: async () => true,
+          isTransactionActive: () => false,
+        });
+      }
+    }
+  } catch (error) {
+    console.warn(`Warning: Error while setting up relationship repository dependencies: ${error.message}`);
+    // Continue with the repository even if dependency injection fails
   }
 
   return repository;

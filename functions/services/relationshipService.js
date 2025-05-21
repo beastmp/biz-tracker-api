@@ -7,6 +7,29 @@ const RelationshipModel = require("../models/relationshipModel");
 const providerFactory = require("../providers/providerFactory");
 
 /**
+ * Creates a normalized measurement configuration object for relationships
+ *
+ * @typedef {Object} MeasurementConfig
+ * @property {string} measurement - Type of measurement (quantity, weight, etc.)
+ * @property {number} amount - Measurement amount
+ * @property {string} unit - Unit of measurement
+ *
+ * @param {Object} data - Source measurement data
+ * @param {string} [defaultMeasurement="quantity"] - Default measurement type if not specified
+ * @return {MeasurementConfig} Configured measurement object
+ */
+const createRelationshipMeasurement = (data = {}, defaultMeasurement = "quantity") => ({
+  measurement: data.measurement || defaultMeasurement,
+  amount: typeof data.amount === "number" ? data.amount : (data.quantity || 0),
+  unit: data.unit || "",
+  // Additional measurement properties
+  weightUnit: data.weightUnit || "lb",
+  lengthUnit: data.lengthUnit || "in",
+  areaUnit: data.areaUnit || "sqft",
+  volumeUnit: data.volumeUnit || "l",
+});
+
+/**
  * Relationship Service class
  * Handles business logic for entity relationships
  */
@@ -16,6 +39,7 @@ class RelationshipService {
    */
   constructor() {
     this.relationshipRepository = providerFactory.createRelationshipRepository();
+    this.itemRepository = providerFactory.createItemRepository();
   }
 
   /**
@@ -201,7 +225,7 @@ class RelationshipService {
   }
 
   /**
-   * Create a purchase-item relationship
+   * Create a purchase-item relationship with normalized measurements
    * 
    * @param {string} purchaseId - Purchase ID
    * @param {string} itemId - Item ID
@@ -209,6 +233,18 @@ class RelationshipService {
    * @returns {Promise<Object>} Created relationship
    */
   async createPurchaseItemRelationship(purchaseId, itemId, attributes = {}) {
+    // Get the item to access its default measurement type
+    const item = await this.itemRepository.findById(itemId);
+    
+    // Use the item's tracking measurement type as default if available
+    const defaultMeasurement = item?.tracking?.measurement || "quantity";
+    
+    // Create normalized measurements
+    const measurements = createRelationshipMeasurement(
+      attributes.measurements || attributes,
+      defaultMeasurement
+    );
+    
     return this.createRelationship({
       primaryId: purchaseId,
       primaryType: RelationshipModel.ENTITY_TYPES.PURCHASE,
@@ -218,12 +254,10 @@ class RelationshipService {
       purchaseItemAttributes: {
         costPerUnit: attributes.costPerUnit || 0,
         totalCost: attributes.totalCost || 0,
-        purchasedBy: attributes.purchasedBy || "quantity",
+        purchasedBy: attributes.purchasedBy || defaultMeasurement,
         purchaseType: attributes.purchaseType || "inventory"
       },
-      measurements: attributes.measurements || {
-        quantity: attributes.quantity || 0
-      }
+      measurements: measurements
     });
   }
 
@@ -247,7 +281,7 @@ class RelationshipService {
   }
 
   /**
-   * Create a sale-item relationship
+   * Create a sale-item relationship with normalized measurements
    * 
    * @param {string} saleId - Sale ID
    * @param {string} itemId - Item ID
@@ -255,37 +289,62 @@ class RelationshipService {
    * @returns {Promise<Object>} Created relationship
    */
   async createSaleItemRelationship(saleId, itemId, attributes = {}) {
+    // Get the item to access its default measurement type
+    const item = await this.itemRepository.findById(itemId);
+    
+    // Use the item's price measurement type as default if available
+    const defaultMeasurement = item?.price?.measurement || "quantity";
+    
+    // Create normalized measurements
+    const measurements = createRelationshipMeasurement(
+      attributes.measurements || attributes,
+      defaultMeasurement
+    );
+    
     return this.createRelationship({
       primaryId: saleId,
       primaryType: RelationshipModel.ENTITY_TYPES.SALE,
       secondaryId: itemId,
       secondaryType: RelationshipModel.ENTITY_TYPES.ITEM,
       relationshipType: RelationshipModel.RELATIONSHIP_TYPES.SALE_ITEM,
-      saleItemAttributes: attributes,
-      measurements: attributes.measurements || {
-        quantity: attributes.quantity || 0
-      }
+      saleItemAttributes: attributes.saleItemAttributes || {
+        unitPrice: attributes.unitPrice || 0,
+        totalPrice: attributes.totalPrice || 0,
+        discountAmount: attributes.discountAmount || 0,
+        saleDate: attributes.saleDate
+      },
+      measurements: measurements
     });
   }
 
   /**
-   * Create a product-material relationship
+   * Create a product-material relationship with normalized measurements
    * 
-   * @param {string} productId - Product item ID
+   * @param {string} productId - Product item ID 
    * @param {string} materialId - Material item ID
    * @param {Object} attributes - Relationship attributes
    * @returns {Promise<Object>} Created relationship
    */
   async createProductMaterialRelationship(productId, materialId, attributes = {}) {
+    // Get the material item to access its default measurement type
+    const material = await this.itemRepository.findById(materialId);
+    
+    // Use the material's tracking measurement type as default if available
+    const defaultMeasurement = material?.tracking?.measurement || "quantity";
+    
+    // Create normalized measurements
+    const measurements = createRelationshipMeasurement(
+      attributes.measurements || attributes,
+      defaultMeasurement
+    );
+    
     return this.createRelationship({
       primaryId: productId,
       primaryType: RelationshipModel.ENTITY_TYPES.ITEM,
       secondaryId: materialId,
       secondaryType: RelationshipModel.ENTITY_TYPES.ITEM,
       relationshipType: RelationshipModel.RELATIONSHIP_TYPES.PRODUCT_MATERIAL,
-      measurements: attributes.measurements || {
-        quantity: attributes.quantity || 0
-      },
+      measurements: measurements,
       metadata: attributes.metadata || {}
     });
   }

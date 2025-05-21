@@ -165,7 +165,8 @@ const mapSimpleTypeToMongoose = (fieldDef) => {
 
 /**
  * Get Mongoose type for a generic type
- * @param {string} type Generic type name
+ * 
+ * @param {string} type - Generic type name
  * @return {Function} Mongoose type
  */
 const getMongooseType = (type) => {
@@ -182,14 +183,25 @@ const getMongooseType = (type) => {
       return mongoose.Schema.Types.ObjectId;
     case "mixed":
       return mongoose.Schema.Types.Mixed;
+    case "object":  // Handle object type properly
+      return mongoose.Schema.Types.Mixed;
+    case "array":   // Handle array type properly
+      return [mongoose.Schema.Types.Mixed];
     case "decimal":
       return mongoose.Schema.Types.Decimal128;
     case "buffer":
       return Buffer;
     case "map":
       return Map;
+    case "id":      // Handle special id type
+      return mongoose.Schema.Types.ObjectId;
+    case "reference": // Handle reference type
+      return mongoose.Schema.Types.ObjectId;
+    case "enum":    // Handle enum type (actual values are set separately)
+      return String;
     default:
-      return String; // Default to String for unknown types
+      console.warn(`Unknown field type "${type}" defaulting to Mixed type`);
+      return mongoose.Schema.Types.Mixed; // Default to Mixed for unknown types (safer option)
   }
 };
 

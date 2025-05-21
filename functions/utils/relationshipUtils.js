@@ -10,8 +10,32 @@
  * @requires ../providers/repositoryFactory
  * @requires ./transactionUtils
  */
-const {getRelationshipRepository} = require("../providers/repositoryFactory");
+const {getRelationshipRepository, getItemRepository} = require("../providers/repositoryFactory");
 const {withTransaction} = require("./transactionUtils");
+
+/**
+ * Creates a normalized measurement configuration object for relationships
+ *
+ * @typedef {Object} MeasurementConfig
+ * @property {string} measurement - Type of measurement (quantity, weight, etc.)
+ * @property {number} amount - Measurement amount
+ * @property {string} unit - Unit of measurement
+ *
+ * @param {Object} data - Source measurement data
+ * @param {string} [defaultMeasurement="quantity"] - Default measurement type if not specified
+ * @return {MeasurementConfig} Configured measurement object
+ * @private
+ */
+const createMeasurementConfig = (data = {}, defaultMeasurement = "quantity") => ({
+  measurement: data.measurement || defaultMeasurement,
+  amount: typeof data.amount === "number" ? data.amount : (data.quantity || 0),
+  unit: data.unit || "",
+  // Additional measurement properties if provided
+  weightUnit: data.weightUnit || "lb",
+  lengthUnit: data.lengthUnit || "in",
+  areaUnit: data.areaUnit || "sqft",
+  volumeUnit: data.volumeUnit || "l",
+});
 
 /**
  * Creates a product-material relationship between two items
@@ -40,6 +64,24 @@ const addProductMaterialRelationship = async (
     transaction = null,
 ) => {
   const relationshipRepo = getRelationshipRepository();
+  const itemRepo = getItemRepository();
+  
+  // Get the material to access its tracking measurement type
+  let defaultMeasurement = "quantity";
+  try {
+    const material = await itemRepo.findById(materialId);
+    if (material?.tracking?.measurement) {
+      defaultMeasurement = material.tracking.measurement;
+    }
+  } catch (error) {
+    console.warn("Unable to get material tracking measurement:", error);
+  }
+
+  // Create normalized measurement configuration
+  const normalizedMeasurements = createMeasurementConfig(
+    measurements,
+    defaultMeasurement
+  );
 
   return await relationshipRepo.create({
     primaryId: productId,
@@ -47,7 +89,7 @@ const addProductMaterialRelationship = async (
     secondaryId: materialId,
     secondaryType: "Item",
     relationshipType: "product_material",
-    measurements,
+    measurements: normalizedMeasurements,
   }, transaction);
 };
 
@@ -79,6 +121,24 @@ const addDerivedItemRelationship = async (
     transaction = null,
 ) => {
   const relationshipRepo = getRelationshipRepository();
+  const itemRepo = getItemRepository();
+  
+  // Get the source item to access its tracking measurement type
+  let defaultMeasurement = "quantity";
+  try {
+    const sourceItem = await itemRepo.findById(sourceItemId);
+    if (sourceItem?.tracking?.measurement) {
+      defaultMeasurement = sourceItem.tracking.measurement;
+    }
+  } catch (error) {
+    console.warn("Unable to get source item tracking measurement:", error);
+  }
+
+  // Create normalized measurement configuration with conversion ratio
+  const normalizedMeasurements = {
+    ...createMeasurementConfig(measurements, defaultMeasurement),
+    conversionRatio: measurements.conversionRatio || 1.0
+  };
 
   return await relationshipRepo.create({
     primaryId: derivedItemId,
@@ -86,7 +146,7 @@ const addDerivedItemRelationship = async (
     secondaryId: sourceItemId,
     secondaryType: "Item",
     relationshipType: "derived",
-    measurements,
+    measurements: normalizedMeasurements,
   }, transaction);
 };
 
@@ -783,4 +843,7 @@ module.exports = {
   removeSaleItemRelationship,
   createSaleWithItems,
   updateInventoryForSale,
+
+  // Export measurement config function for testing or external use
+  createMeasurementConfig
 };

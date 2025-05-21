@@ -11,12 +11,13 @@
  * @requires ../validation/errors
  */
 
-const {getProviderFactory} = require("../providers/providerFactory");
+const ProviderFactory = require("../providers/providerFactory");
 const {AppError} = require("../validation/errors");
 
 /**
  * Executes a function within a database transaction, automatically handling
  * commit and rollback operations based on whether the function succeeds or fails.
+ * Falls back to non-transactional execution if transaction support is unavailable.
  *
  * @async
  * @param {Function} callback - Function to execute within the transaction
@@ -33,32 +34,59 @@ const {AppError} = require("../validation/errors");
  * });
  */
 const withTransaction = async (callback) => {
-  const transactionProvider = getProviderFactory().getTransactionProvider();
-
-  // Use the provider's withTransaction method
-  // if available (from BaseTransactionProvider)
-  if (typeof transactionProvider.withTransaction === "function") {
-    return await transactionProvider.withTransaction(callback);
-  }
-
-  // Fallback implementation if withTransaction is not available on the provider
-  // Start a transaction
-  const transaction = await transactionProvider.startTransaction();
-
   try {
-    // Execute the callback with the transaction object
-    const result = await callback(transaction);
+    // Use the ProviderFactory singleton directly
+    const transactionProvider = ProviderFactory.getTransactionProvider();
+    
+    // Check if transaction provider exists and has required methods
+    if (!transactionProvider) {
+      console.warn("Transaction provider unavailable. Falling back to non-transactional execution.");
+      return await callback(null);
+    }
 
-    // If successful, commit the transaction
-    await transactionProvider.commitTransaction(transaction);
+    // Use the provider's withTransaction method if available
+    if (typeof transactionProvider.withTransaction === "function") {
+      return await transactionProvider.withTransaction(callback);
+    }
+    
+    // Check if basic transaction methods are available
+    if (typeof transactionProvider.beginTransaction !== "function" && 
+        typeof transactionProvider.startTransaction !== "function") {
+      console.warn("Transaction methods unavailable. Falling back to non-transactional execution.");
+      return await callback(null);
+    }
 
-    return result;
-  } catch (error) {
-    // If an error occurred, roll back the transaction
-    await transactionProvider.rollbackTransaction(transaction);
+    // Get the appropriate transaction start method
+    const startTransactionMethod = typeof transactionProvider.beginTransaction === "function" ? 
+      "beginTransaction" : "startTransaction";
+      
+    // Start a transaction
+    const transaction = await transactionProvider[startTransactionMethod]();
 
-    // Re-throw the error
-    throw error;
+    try {
+      // Execute the callback with the transaction object
+      const result = await callback(transaction);
+
+      // If successful, commit the transaction if commit method exists
+      if (typeof transactionProvider.commitTransaction === "function") {
+        await transactionProvider.commitTransaction(transaction);
+      }
+
+      return result;
+    } catch (error) {
+      // If an error occurred and rollback exists, roll back the transaction
+      if (typeof transactionProvider.rollbackTransaction === "function") {
+        await transactionProvider.rollbackTransaction(transaction);
+      }
+
+      // Re-throw the error
+      throw error;
+    }
+  } catch (err) {
+    // If transaction infrastructure fails, try to execute without transaction
+    console.error("Transaction infrastructure error:", err.message);
+    console.warn("Falling back to non-transactional execution due to error.");
+    return await callback(null);
   }
 };
 

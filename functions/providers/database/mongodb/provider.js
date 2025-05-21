@@ -111,7 +111,13 @@ class MongoDBProvider {
    */
   createItemRepository() {
     if (!this.repositories.item) {
-      this.repositories.item = new MongoDBItemRepository(this.config);
+      // Pass the provider reference in the config
+      const config = {
+        ...this.config,
+        provider: this  // Pass the provider instance to the repository
+      };
+      
+      this.repositories.item = new MongoDBItemRepository(config);
 
       // Set dependencies if available
       if (this.repositories.relationship) {
@@ -134,10 +140,13 @@ class MongoDBProvider {
    */
   createSaleRepository() {
     if (!this.repositories.sale) {
-      this.repositories.sale = new MongoDBSaleRepository(
-          {db: mongoose.connection},
-          this.config
-      );
+      // Pass the provider reference in the config
+      const config = {
+        ...this.config,
+        provider: this  // Pass the provider instance to the repository
+      };
+      
+      this.repositories.sale = new MongoDBSaleRepository(config);
 
       // Set item repository dependency if it exists
       if (this.repositories.item) {
@@ -164,7 +173,13 @@ class MongoDBProvider {
    */
   createPurchaseRepository() {
     if (!this.repositories.purchase) {
-      this.repositories.purchase = new MongoDBPurchaseRepository(this.config);
+      // Pass the provider reference in the config
+      const config = {
+        ...this.config,
+        provider: this  // Pass the provider instance to the repository
+      };
+      
+      this.repositories.purchase = new MongoDBPurchaseRepository(config);
 
       // Set item repository dependency if it exists
       if (this.repositories.item) {
@@ -248,6 +263,54 @@ class MongoDBProvider {
       );
     }
     return this.repositories.relationship;
+  }
+
+  /**
+   * Execute raw MongoDB operations on a collection
+   *
+   * @param {string} collectionName - Name of the collection to operate on
+   * @param {string} id - ID of the document to update
+   * @param {Object} updateData - Raw MongoDB update operators ($set, $unset, etc.)
+   * @param {Object} [transaction=null] - Optional transaction session
+   * @return {Promise<Object|null>} Updated document or null if not found
+   */
+  async updateRaw(collectionName, id, updateData, transaction = null) {
+    try {
+      // Validate inputs
+      if (!collectionName || !id || !updateData) {
+        throw new Error("Missing required parameters for raw update operation");
+      }
+
+      // Get the collection
+      const collection = mongoose.connection.collection(collectionName);
+      if (!collection) {
+        throw new Error(`Collection '${collectionName}' not found`);
+      }
+
+      // Convert string ID to ObjectId if it's in string format
+      const objectId = typeof id === "string" ? new mongoose.Types.ObjectId(id) : id;
+      
+      // Prepare options
+      const options = { returnDocument: "after" };
+      
+      // Add session if transaction is provided
+      if (transaction && transaction.session) {
+        options.session = transaction.session;
+      }
+
+      // Execute findOneAndUpdate with raw MongoDB operators
+      const result = await collection.findOneAndUpdate(
+        { _id: objectId },
+        updateData,
+        options
+      );
+
+      // Return the updated document or null
+      return result.value || null;
+    } catch (error) {
+      console.error(`Error in raw MongoDB update for ${collectionName}/${id}:`, error);
+      throw error;
+    }
   }
 
   /**

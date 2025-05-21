@@ -402,6 +402,30 @@ class ProviderFactory {
     this.activeProviders = {};
     this.repositories = {};
   }
+
+  /**
+   * Gets the transaction provider from the database provider
+   * 
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @return {Object} Transaction provider instance
+   */
+  getTransactionProvider(databaseProviderId = null) {
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(databaseProviderId);
+    
+    // Get transaction provider from database provider
+    if (dbProvider && typeof dbProvider.getTransactionProvider === "function") {
+      return dbProvider.getTransactionProvider();
+    }
+    
+    // Return a no-op transaction provider if not available
+    return {
+      beginTransaction: async () => null,
+      commitTransaction: async () => true,
+      rollbackTransaction: async () => true,
+      isTransactionActive: () => false,
+    };
+  }
 }
 
 // Export singleton instance
