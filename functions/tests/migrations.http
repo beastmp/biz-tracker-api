@@ -1,11 +1,11 @@
-/**
- * Migration API Tests
- * 
- * This file contains HTTP requests for testing the migration endpoints.
- * To use this file, you need the REST Client extension for VS Code.
- * 
- * @see https://marketplace.visualstudio.com/items?itemName=humao.rest-client
- */
+//
+// Migration API Tests
+//
+// This file contains HTTP requests for testing the migration endpoints.
+// To use this file, you need the REST Client extension for VS Code.
+// 
+// @see https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+//
 
 // Set the base URL for your API
 @baseUrl = http://127.0.0.1:5001/biz-tracker-a5562/us-central1/api
@@ -17,23 +17,64 @@
 GET {{baseUrl}}/health HTTP/1.1
 
 ###
-// @name migrateAll
-// Run complete migration (all steps)
-// This performs item normalization, relationship normalization, and embedded relationship conversion
-GET {{baseUrl}}/migrations/all HTTP/1.1
+// @name getPurchases
+// Get all purchases to verify migration progress
+GET {{baseUrl}}/purchases HTTP/1.1
 Content-Type: {{contentType}}
 
-// Expected response includes summary of all migration operations
+@purchaseId = 67edfdb8e62bc8529544bf55
+
+###
+// @name getPurchase
+// Get a specific purchase to examine its structure
+GET {{baseUrl}}/purchases/{{purchaseId}} HTTP/1.1
+Content-Type: {{contentType}}
+
+###
+// @name getItems
+// Get all items to verify migration progress
+GET {{baseUrl}}/items HTTP/1.1
+Content-Type: {{contentType}}
+
+@itemId = 67edfd91e62bc8529544bf52
+
+###
+// @name getItem
+// Get a specific item to examine its structure
+GET {{baseUrl}}/items/{{itemId}} HTTP/1.1
+Content-Type: {{contentType}}
+
+###
+// @name getRelationships
+// Get all relationships to verify migration progress
+GET {{baseUrl}}/relationships?limit=100 HTTP/1.1
+Content-Type: {{contentType}}
+
+###
+// @name getItemPrimaryRelationships
+// Get primary relationships for a specific item (replace with actual item ID)
+GET {{baseUrl}}/relationships/primary/{{itemId}}/Item HTTP/1.1
+Content-Type: {{contentType}}
+
+###
+// @name getItemSecondaryRelationships
+// Get secondary relationships for a specific item (replace with actual item ID)
+GET {{baseUrl}}/relationships/secondary/{{itemId}}/Item HTTP/1.1
+Content-Type: {{contentType}}
+
+###
+// @name migrateSingleItem
+// Migrate a single item (replace with actual item ID)
+GET {{baseUrl}}/migrations/items/{{itemId}} HTTP/1.1
+Content-Type: {{contentType}}
+
+// Expected response:
 // {
 //   "status": "success",
-//   "message": "Complete migration finished",
-//   "data": {
-//     "items": { "successful": N, "failed": M, ... },
-//     "relationships": { "successful": N, "failed": M, ... },
-//     "embeddedRelationships": { "totalRelationshipsCreated": N, "totalErrors": M, ... },
-//     "summary": { ... }
-//   }
+//   "message": "Item migrated successfully",
+//   "data": { ... } // Updated item with normalized measurement structure
 // }
+
 
 ###
 // @name migrateAllItems
@@ -53,18 +94,6 @@ Content-Type: {{contentType}}
 //   }
 // }
 
-###
-// @name migrateSingleItem
-// Migrate a single item (replace with actual item ID)
-GET {{baseUrl}}/migrations/items/64f5a53d9b272e001f123456 HTTP/1.1
-Content-Type: {{contentType}}
-
-// Expected response:
-// {
-//   "status": "success",
-//   "message": "Item migrated successfully",
-//   "data": { ... } // Updated item with normalized measurement structure
-// }
 
 ###
 // @name migrateAllRelationships
@@ -179,217 +208,29 @@ Content-Type: {{contentType}}
 // }
 
 ###
-// BATCH MIGRATION ENDPOINTS
-// The following endpoints support processing migrations in smaller batches to prevent timeouts
-
-
-// Batch migration options explanation:
-// 
-// batchSize: Controls how many entities are processed in a single batch
-// startAfter: The ID to resume processing from (allows paginated processing)
-// limit: Maximum number of entities to process (0 means no limit)
-
-###
-// @name migrateItemsInBatches
-// Migrate embedded relationships for items using batch processing
-GET {{baseUrl}}/migrations/batch/items?batchSize=10 HTTP/1.1
+// @name migrateAll
+// Run complete migration (all steps)
+// This performs item normalization, relationship normalization, and embedded relationship conversion
+GET {{baseUrl}}/migrations/all HTTP/1.1
 Content-Type: {{contentType}}
 
-// Expected response:
+// Expected response includes summary of all migration operations
 // {
 //   "status": "success",
-//   "message": "Processed 10 items, created 15 relationships, skipped 5, with 2 errors in 3.5s",
+//   "message": "Complete migration finished",
 //   "data": {
-//     "total": 10,
-//     "processed": 10,
-//     "successful": 15,
-//     "skipped": 5,
-//     "failed": 2,
-//     "errors": [],
-//     "batches": {
-//       "total": 2,
-//       "completed": 2
-//     },
-//     "entityType": "Item",
-//     "startTime": "2025-05-20T01:23:45.678Z",
-//     "endTime": "2025-05-20T01:23:49.123Z",
-//     "duration": 3.445,
-//     "lastProcessedId": "67edfd91e62bc8529544bf5a"
-//   },
-//   "resumeFrom": {
-//     "startAfter": "67edfd91e62bc8529544bf5a"
+//     "items": { "successful": N, "failed": M, ... },
+//     "relationships": { "successful": N, "failed": M, ... },
+//     "embeddedRelationships": { "totalRelationshipsCreated": N, "totalErrors": M, ... },
+//     "summary": { ... }
 //   }
 // }
-
-###
-// @name migratePurchasesInBatches
-// Migrate embedded relationships for purchases using batch processing
-GET {{baseUrl}}/migrations/batch/purchases?batchSize=3&startAfter=67edfdb8e62bc8529544bf54 HTTP/1.1
-Content-Type: {{contentType}}
-
-// Expected response similar to migrateItemsInBatches but for purchases
-
-###
-// @name migrateSalesInBatches
-// Migrate embedded relationships for sales using batch processing
-GET {{baseUrl}}/migrations/batch/sales?batchSize=3&limit=5 HTTP/1.1
-Content-Type: {{contentType}}
-
-// Expected response similar to migrateItemsInBatches but for sales
-
-###
-// @name migrateAllEntitiesInBatches
-// Migrate all types of entities with granular control
-POST {{baseUrl}}/migrations/batch/all HTTP/1.1
-Content-Type: {{contentType}}
-
-{
-  "items": {
-    "enabled": true,
-    "batchSize": 5,
-    "startAfter": "67edfd91e62bc8529544bf52",
-    "limit": 10
-  },
-  "purchases": {
-    "enabled": true,
-    "batchSize": 3,
-    "limit": 5
-  },
-  "sales": {
-    "enabled": false
-  }
-}
-
-// Expected response:
-// {
-//   "status": "success",
-//   "message": "Migration completed in 8.3s: processed 15 entities, created 25 relationships",
-//   "data": {
-//     "startTime": "2025-05-20T01:30:00.000Z",
-//     "items": {
-//       "processed": 10,
-//       "relationshipsCreated": 15,
-//       "errors": [],
-//       "lastProcessedId": "67edfd91e62bc8529544bf62"
-//     },
-//     "purchases": {
-//       "processed": 5,
-//       "relationshipsCreated": 10,
-//       "errors": [],
-//       "lastProcessedId": "67edfdb8e62bc8529544bf5a"
-//     },
-//     "sales": {
-//       "processed": 0,
-//       "relationshipsCreated": 0,
-//       "errors": []
-//      },
-//      "summary": {
-//        "totalProcessed": 15,
-//        "totalRelationshipsCreated": 25,
-//        "totalErrors": 0
-//      },
-//      "endTime": "2025-05-20T01:30:08.300Z",
-//      "duration": 8.3,
-//      "resumeFrom": {
-//        "items": "67edfd91e62bc8529544bf62",
-//        "purchases": "67edfdb8e62bc8529544bf5a",
-//        "sales": null
-//      }
-//    }
-//  }
-
-###
-// @name resumeBatchMigration
-// Example of resuming a batch migration from where it left off
-POST {{baseUrl}}/migrations/batch/all HTTP/1.1
-Content-Type: {{contentType}}
-
-{
-  "items": {
-    "enabled": true,
-    "startAfter": "67edfd91e62bc8529544bf62"
-  },
-  "purchases": {
-    "enabled": true,
-    "startAfter": "67edfdb8e62bc8529544bf5a"
-  },
-  "sales": {
-    "enabled": true
-  }
-}
-
-###
-// @name migrateSpecificPurchaseWithSmallBatch
-// Process a specific purchase that's causing timeout issues
-GET {{baseUrl}}/migrations/batch/purchases?batchSize=1&limit=1&startAfter=67edfdb8e62bc8529544bf54 HTTP/1.1
-Content-Type: {{contentType}}
-
-// Expected response:
-// {
-//   "status": "success",
-//   "message": "Processed 1 purchases, created 4 relationships, skipped 0, with 0 errors in 0.8s",
-//   "data": {
-//     "total": 1,
-//     "processed": 1,
-//     "successful": 4,
-//     "skipped": 0,
-//     "failed": 0,
-//     "errors": [],
-//     "batches": {
-//       "total": 1,
-//       "completed": 1
-//     },
-//     "entityType": "Purchase",
-//     "startAfter": "67edfdb8e62bc8529544bf54",
-//     "limit": 1,
-//     "startTime": "2025-05-20T01:45:20.123Z",
-//     "lastProcessedId": "67edfdb8e62bc8529544bf55",
-//     "relationshipsCreated": 4,
-//     "endTime": "2025-05-20T01:45:20.932Z",
-//     "duration": 0.809
-//   },
-//   "resumeFrom": {
-//     "startAfter": "67edfdb8e62bc8529544bf55"
-//   }
-// }
-
-###
-// @name migrateSinglePurchaseItem
-// Migration troubleshooting - get a specific purchase to examine its structure
-GET {{baseUrl}}/purchases/67edfdb8e62bc8529544bf55 HTTP/1.1
-Content-Type: {{contentType}}
 
 ###
 // @name executePurchaseItemMigration
 // Directly migrate a specific purchase's items to relationships with custom batch settings
 // Useful for working around problematic migrations
 GET {{baseUrl}}/migrations/embedded/purchases/67edfdb8e62bc8529544bf55 HTTP/1.1
-Content-Type: {{contentType}}
-
-###
-// @name batchMigrationForSpecificPurchase 
-// Process just the problematic purchase that was causing timeout
-GET {{baseUrl}}/migrations/batch/purchases?batchSize=1&limit=1&exactId=67edfdb8e62bc8529544bf55 HTTP/1.1
-Content-Type: {{contentType}}
-
-###
-// @name checkRelationshipsMigrationProgress
-// Get all relationships to verify migration progress
-GET {{baseUrl}}/relationships?limit=100 HTTP/1.1
-Content-Type: {{contentType}}
-
-###
-// Test various relationship endpoints after migration
-
-// @name getProductComponents
-// Get materials used in a product (replace with actual product ID)
-GET {{baseUrl}}/relationships/primary/64f5a53d9b272e001f123456/Item HTTP/1.1
-Content-Type: {{contentType}}
-
-###
-// @name getProductsUsingMaterial
-// Get products using a material (replace with actual material ID)
-GET {{baseUrl}}/relationships/secondary/67edfd91e62bc8529544bf52/Item HTTP/1.1
 Content-Type: {{contentType}}
 
 ###

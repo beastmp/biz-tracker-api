@@ -343,90 +343,483 @@ class ProviderFactory {
   }
 
   /**
-   * Creates a complete business layer with all repositories and their dependencies
+   * Creates a base item repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} BaseItem repository instance
+   */
+  createBaseItemRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `baseItem-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    const baseItemRepository = dbProvider.createBaseItemRepository 
+      ? dbProvider.createBaseItemRepository(options)
+      : dbProvider.createItemRepository(options); // Fallback for backward compatibility
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = baseItemRepository;
+
+    return baseItemRepository;
+  }
+
+  /**
+   * Creates a base transaction repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} BaseTransaction repository instance
+   */
+  createBaseTransactionRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `baseTransaction-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    let baseTransactionRepository;
+    
+    if (dbProvider.createBaseTransactionRepository) {
+      baseTransactionRepository = dbProvider.createBaseTransactionRepository(options);
+    } else {
+      // Fallback for backward compatibility - use a general repository
+      console.warn("Database provider does not have createBaseTransactionRepository method. Using fallback implementation.");
+      
+      // Import the base repository and create an instance
+      const BaseTransactionRepository = require("./repositories/baseTransactionRepository");
+      baseTransactionRepository = new BaseTransactionRepository();
+      
+      // Set the provider to ensure it can perform database operations
+      baseTransactionRepository.setTransactionProvider(dbProvider);
+    }
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = baseTransactionRepository;
+
+    return baseTransactionRepository;
+  }
+
+  /**
+   * Creates a purchase transaction repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} PurchaseTransaction repository instance
+   */
+  createPurchaseTransactionRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `purchaseTransaction-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    let purchaseTransactionRepository;
+    
+    if (dbProvider.createPurchaseTransactionRepository) {
+      purchaseTransactionRepository = dbProvider.createPurchaseTransactionRepository(options);
+    } else {
+      // Fallback for backward compatibility - use a base transaction repository with type filter
+      console.warn("Database provider does not have createPurchaseTransactionRepository method. Using BaseTransactionRepository with purchase type filter.");
+      
+      // Get or create base transaction repository
+      const baseTransactionRepository = this.createBaseTransactionRepository(providerId, options);
+      
+      // Create a type-filtered repository that delegates to the base repository
+      purchaseTransactionRepository = {
+        // Default type for new transactions
+        defaultType: "purchase",
+        
+        // Create with purchase type added
+        create: async (data, transaction) => {
+          return baseTransactionRepository.create({
+            ...data,
+            type: data.type || this.defaultType
+          }, transaction);
+        },
+        
+        // Find by ID without filter (single entity)
+        findById: async (id) => baseTransactionRepository.findById(id),
+        
+        // Add purchase type filter to all filter operations
+        findAll: async (filter = {}, options = {}) => {
+          return baseTransactionRepository.findAll({
+            ...filter,
+            type: filter.type || this.defaultType
+          }, options);
+        },
+        
+        // Delegate other methods to base repository
+        update: async (id, data, transaction) => baseTransactionRepository.update(id, data, transaction),
+        delete: async (id, transaction) => baseTransactionRepository.delete(id, transaction),
+        search: async (text, options) => baseTransactionRepository.search(text, { 
+          ...options,
+          filter: { ...options?.filter, type: this.defaultType }
+        }),
+        count: async (filter = {}) => baseTransactionRepository.count({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        exists: async (filter = {}) => baseTransactionRepository.exists({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findOne: async (filter = {}) => baseTransactionRepository.findOne({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findByQuery: async (query, options) => baseTransactionRepository.findByQuery(query, options),
+        bulkCreate: async (items, transaction) => {
+          items = items.map(item => ({ ...item, type: item.type || this.defaultType }));
+          return baseTransactionRepository.bulkCreate(items, transaction);
+        },
+        bulkUpdate: async (filter, update, transaction) => baseTransactionRepository.bulkUpdate({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, update, transaction),
+        bulkDelete: async (filter, transaction) => baseTransactionRepository.bulkDelete({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, transaction),
+        findByPattern: async (pattern, options) => baseTransactionRepository.findByPattern(pattern, options),
+        findWithRelations: async (filter = {}, relations, options) => baseTransactionRepository.findWithRelations({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, relations, options),
+        
+        // Set provider dependency
+        setTransactionProvider: (provider) => {
+          if (baseTransactionRepository.setTransactionProvider) {
+            baseTransactionRepository.setTransactionProvider(provider);
+          }
+        }
+      };
+    }
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = purchaseTransactionRepository;
+
+    return purchaseTransactionRepository;
+  }
+
+  /**
+   * Creates a sale transaction repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} SaleTransaction repository instance
+   */
+  createSaleTransactionRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `saleTransaction-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    let saleTransactionRepository;
+    
+    if (dbProvider.createSaleTransactionRepository) {
+      saleTransactionRepository = dbProvider.createSaleTransactionRepository(options);
+    } else {
+      // Fallback for backward compatibility - use a base transaction repository with type filter
+      console.warn("Database provider does not have createSaleTransactionRepository method. Using BaseTransactionRepository with sale type filter.");
+      
+      // Get or create base transaction repository
+      const baseTransactionRepository = this.createBaseTransactionRepository(providerId, options);
+      
+      // Create a type-filtered repository that delegates to the base repository
+      saleTransactionRepository = {
+        // Default type for new transactions
+        defaultType: "sale",
+        
+        // Create with sale type added
+        create: async (data, transaction) => {
+          return baseTransactionRepository.create({
+            ...data,
+            type: data.type || this.defaultType
+          }, transaction);
+        },
+        
+        // Find by ID without filter (single entity)
+        findById: async (id) => baseTransactionRepository.findById(id),
+        
+        // Add sale type filter to all filter operations
+        findAll: async (filter = {}, options = {}) => {
+          return baseTransactionRepository.findAll({
+            ...filter,
+            type: filter.type || this.defaultType
+          }, options);
+        },
+        
+        // Delegate other methods to base repository
+        update: async (id, data, transaction) => baseTransactionRepository.update(id, data, transaction),
+        delete: async (id, transaction) => baseTransactionRepository.delete(id, transaction),
+        search: async (text, options) => baseTransactionRepository.search(text, { 
+          ...options,
+          filter: { ...options?.filter, type: this.defaultType }
+        }),
+        count: async (filter = {}) => baseTransactionRepository.count({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        exists: async (filter = {}) => baseTransactionRepository.exists({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findOne: async (filter = {}) => baseTransactionRepository.findOne({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findByQuery: async (query, options) => baseTransactionRepository.findByQuery(query, options),
+        bulkCreate: async (items, transaction) => {
+          items = items.map(item => ({ ...item, type: item.type || this.defaultType }));
+          return baseTransactionRepository.bulkCreate(items, transaction);
+        },
+        bulkUpdate: async (filter, update, transaction) => baseTransactionRepository.bulkUpdate({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, update, transaction),
+        bulkDelete: async (filter, transaction) => baseTransactionRepository.bulkDelete({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, transaction),
+        findByPattern: async (pattern, options) => baseTransactionRepository.findByPattern(pattern, options),
+        findWithRelations: async (filter = {}, relations, options) => baseTransactionRepository.findWithRelations({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, relations, options),
+        
+        // Set provider dependency
+        setTransactionProvider: (provider) => {
+          if (baseTransactionRepository.setTransactionProvider) {
+            baseTransactionRepository.setTransactionProvider(provider);
+          }
+        }
+      };
+    }
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = saleTransactionRepository;
+
+    return saleTransactionRepository;
+  }
+
+  /**
+   * Creates an asset item repository with the specified database provider
+   *
+   * @param {string} [databaseProviderId=null] - Optional database provider ID
+   * @param {Object} [options={}] - Additional options for repository creation
+   * @return {Object} AssetItem repository instance
+   */
+  createAssetItemRepository(databaseProviderId = null, options = {}) {
+    const providerId = databaseProviderId ||
+                      this.config.database.provider ||
+                      "mongodb";
+    const cacheKey = `assetItem-${providerId}`;
+
+    // If we have a cached repository, return it
+    if (this.repositories[cacheKey]) {
+      return this.repositories[cacheKey];
+    }
+
+    // Get the database provider
+    const dbProvider = this.getDatabaseProvider(providerId);
+
+    // Create repository based on provider
+    let assetItemRepository;
+    
+    if (dbProvider.createAssetItemRepository) {
+      assetItemRepository = dbProvider.createAssetItemRepository(options);
+    } else {
+      // Fallback for backward compatibility - use a base item repository with type filter
+      console.warn("Database provider does not have createAssetItemRepository method. Using BaseItemRepository with asset type filter.");
+      
+      // Get or create base item repository
+      const baseItemRepository = this.createBaseItemRepository(providerId, options);
+      
+      // Create a type-filtered repository that delegates to the base repository
+      assetItemRepository = {
+        // Default type for new items
+        defaultType: "asset",
+        
+        // Create with asset type added
+        create: async (data, transaction) => {
+          return baseItemRepository.create({
+            ...data,
+            type: data.type || this.defaultType
+          }, transaction);
+        },
+        
+        // Find by ID without filter (single entity)
+        findById: async (id) => baseItemRepository.findById(id),
+        
+        // Add asset type filter to all filter operations
+        findAll: async (filter = {}, options = {}) => {
+          return baseItemRepository.findAll({
+            ...filter,
+            type: filter.type || this.defaultType
+          }, options);
+        },
+        
+        // Delegate other methods to base repository with type filters
+        update: async (id, data, transaction) => baseItemRepository.update(id, data, transaction),
+        delete: async (id, transaction) => baseItemRepository.delete(id, transaction),
+        search: async (text, options) => baseItemRepository.search(text, { 
+          ...options,
+          filter: { ...options?.filter, type: this.defaultType }
+        }),
+        count: async (filter = {}) => baseItemRepository.count({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        exists: async (filter = {}) => baseItemRepository.exists({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findOne: async (filter = {}) => baseItemRepository.findOne({
+          ...filter,
+          type: filter.type || this.defaultType
+        }),
+        findByQuery: async (query, options) => baseItemRepository.findByQuery(query, options),
+        bulkCreate: async (items, transaction) => {
+          items = items.map(item => ({ ...item, type: item.type || this.defaultType }));
+          return baseItemRepository.bulkCreate(items, transaction);
+        },
+        bulkUpdate: async (filter, update, transaction) => baseItemRepository.bulkUpdate({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, update, transaction),
+        bulkDelete: async (filter, transaction) => baseItemRepository.bulkDelete({
+          ...filter,
+          type: filter.type || this.defaultType
+        }, transaction)
+      };
+    }
+
+    // Cache the repository instance
+    this.repositories[cacheKey] = assetItemRepository;
+
+    return assetItemRepository;
+  }
+
+  /**
+   * Creates an updated business layer with all repositories including the new model types
    *
    * @param {string} [databaseProviderId=null] - Optional database provider ID
    * @param {Object} [options={}] - Additional options for repositories
    * @return {Object} Object containing all repository instances
    */
-  createBusinessLayer(databaseProviderId = null, options = {}) {
+  createExtendedBusinessLayer(databaseProviderId = null, options = {}) {
     const providerId = databaseProviderId ||
                       this.config.database.provider ||
                       "mongodb";
 
-    // Create repositories
-    const itemRepository = this.createItemRepository(providerId, options);
-    const relationshipRepository = this.createRelationshipRepository(
-        providerId,
-        options,
-    );
-    const assetRepository = this.createAssetRepository(providerId, options);
-    const saleRepository = this.createSaleRepository(providerId, options);
-    const purchaseRepository = this.createPurchaseRepository(providerId, options);
-
-    // Inject dependencies between repositories
-    itemRepository.setRelationshipRepository(relationshipRepository);
-
-    if (saleRepository.setItemRepository) {
-      saleRepository.setItemRepository(itemRepository);
-    }
-
-    if (saleRepository.setRelationshipRepository) {
-      saleRepository.setRelationshipRepository(relationshipRepository);
-    }
-
-    if (purchaseRepository.setItemRepository) {
-      purchaseRepository.setItemRepository(itemRepository);
-    }
-
-    if (purchaseRepository.setRelationshipRepository) {
-      purchaseRepository.setRelationshipRepository(relationshipRepository);
-    }
-
-    // Return the complete business layer
-    return {
-      item: itemRepository,
-      relationship: relationshipRepository,
-      asset: assetRepository,
-      sale: saleRepository,
-      purchase: purchaseRepository,
-    };
-  }
-
-  /**
-   * Clears cached providers and repositories
-   *
-   * @return {void}
-   */
-  clearCache() {
-    this.activeProviders = {};
-    this.repositories = {};
-  }
-
-  /**
-   * Gets the transaction provider from the database provider
-   * 
-   * @param {string} [databaseProviderId=null] - Optional database provider ID
-   * @return {Object} Transaction provider instance
-   */
-  getTransactionProvider(databaseProviderId = null) {
-    // Get the database provider
-    const dbProvider = this.getDatabaseProvider(databaseProviderId);
+    // Create existing repositories
+    const businessLayer = this.createBusinessLayer(providerId, options);
     
-    // Get transaction provider from database provider
-    if (dbProvider && typeof dbProvider.getTransactionProvider === "function") {
-      return dbProvider.getTransactionProvider();
+    // Create new model repositories
+    const baseItemRepository = this.createBaseItemRepository(providerId, options);
+    const baseTransactionRepository = this.createBaseTransactionRepository(providerId, options);
+    const purchaseTransactionRepository = this.createPurchaseTransactionRepository(providerId, options);
+    const saleTransactionRepository = this.createSaleTransactionRepository(providerId, options);
+    const assetItemRepository = this.createAssetItemRepository(providerId, options);
+
+    // Inject dependencies between repositories if they support it
+    if (baseItemRepository.setTransactionProvider) {
+      baseItemRepository.setTransactionProvider(this.getTransactionProvider(providerId));
     }
     
-    // Return a no-op transaction provider if not available
+    if (baseTransactionRepository.setTransactionProvider) {
+      baseTransactionRepository.setTransactionProvider(this.getTransactionProvider(providerId));
+    }
+    
+    if (purchaseTransactionRepository.setTransactionProvider) {
+      purchaseTransactionRepository.setTransactionProvider(this.getTransactionProvider(providerId));
+    }
+    
+    if (saleTransactionRepository.setTransactionProvider) {
+      saleTransactionRepository.setTransactionProvider(this.getTransactionProvider(providerId));
+    }
+
+    // Return the complete extended business layer
     return {
-      beginTransaction: async () => null,
-      commitTransaction: async () => true,
-      rollbackTransaction: async () => true,
-      isTransactionActive: () => false,
+      ...businessLayer,
+      baseItem: baseItemRepository,
+      assetItem: assetItemRepository,
+      baseTransaction: baseTransactionRepository,
+      purchaseTransaction: purchaseTransactionRepository,
+      saleTransaction: saleTransactionRepository,
     };
   }
 }
+
+/**
+ * Clears cached providers and repositories
+ *
+ * @return {void}
+ */
+ProviderFactory.prototype.clearCache = function() {
+  this.activeProviders = {};
+  this.repositories = {};
+};
+
+/**
+ * Gets the transaction provider from the database provider
+ * 
+ * @param {string} [databaseProviderId=null] - Optional database provider ID
+ * @return {Object} Transaction provider instance
+ */
+ProviderFactory.prototype.getTransactionProvider = function(databaseProviderId = null) {
+  // Get the database provider
+  const dbProvider = this.getDatabaseProvider(databaseProviderId);
+  
+  // Get transaction provider from database provider
+  if (dbProvider && typeof dbProvider.getTransactionProvider === "function") {
+    return dbProvider.getTransactionProvider();
+  }
+  
+  // Return a no-op transaction provider if not available
+  return {
+    beginTransaction: async () => null,
+    commitTransaction: async () => true,
+    rollbackTransaction: async () => true,
+    isTransactionActive: () => false,
+  };
+};
 
 // Export singleton instance
 module.exports = new ProviderFactory();
